@@ -418,3 +418,22 @@ test('피구 아웃 기록: 누가 아웃됐고 누가 아웃시켰는지, 되�
   assert.equal(rec['ta/p1'].ko, 2);
   assert.equal(rec['tb/p2'].ko, 0);
 });
+
+test('선발 인원: 명단의 선발이 설정보다 많으면 번호 순으로 설정 인원까지만 선발로 선다', () => {
+  const grade = L.gradeFromSport('volley', '6학년');
+  const players = roster(10, 10);
+  assert.equal(L.starterIds(players, grade.starters).length, 6);
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0, { rosters: { a: players, b: players } }));
+  assert.equal(Object.values(g.lineup.a).filter((s) => s === 'on').length, 6);
+  assert.equal(Object.values(g.lineup.a).filter((s) => s === 'bench').length, 4);
+});
+
+test('빠짐으로 둔 선수는 경기 명단에 들어가지 않는다', () => {
+  const grade = L.gradeFromSport('futsal', '6학년');
+  const players = roster(8, 5); players.p8.off = true;
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0, { rosters: { a: players, b: players } }));
+  assert.equal(g.lineup.a.p8, undefined);
+  assert.equal(Object.values(g.lineup.a).filter((s) => s === 'bench').length, 2);
+});

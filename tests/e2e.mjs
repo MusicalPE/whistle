@@ -65,10 +65,10 @@ async function addGrade(label, sport) {
   await sbtn(t, '추가').click();
 }
 async function addGameAndOpen() {
-  await t.goto(`${base}#home`);
+  await t.goto(`${base}#games`);
   await t.getByRole('button', { name: '+ 경기 추가' }).click();
   await sbtn(t, '추가').click();
-  await t.locator('a.game').last().click();
+  await t.locator('a.game:not(.other)').last().click();
 }
 
 try {
@@ -77,9 +77,13 @@ try {
     await btn(t, '미리보기로 시작').click();
     await t.fill('#new-t', '햇살초 스포츠클럽 리그');
     await btn(t, '대회 만들기').click();
-    await t.waitForSelector('text=학생용 화면 QR');
+    await t.waitForSelector('text=대회 목록');
     tid = await t.evaluate(() => localStorage.getItem('whistle-tid'));
     assert.ok(tid);
+    await t.goto(`${base}#games`);
+    await t.waitForSelector('text=학생용 화면 QR');
+    await t.goto(`${base}#games`);
+    await t.waitForSelector('text=학생용 화면 QR');
     assert.ok(await t.locator('.qr svg').count(), 'QR 그림이 그려져야 함');
   });
 
@@ -87,10 +91,10 @@ try {
     await addGrade('6학년', 'futsal');
     await t.goto(`${base}#teams`);
     await addTeam('6-1 번개', names.map((n, i) => `${i + 1} ${n}`));
-    assert.match(await text(t), /선수 8명 · 선발 5 \/ 교체 3/);
+    assert.match(await text(t), /선수 8명 · 선발 5\/5 · 후보 3/);
     await addTeam('6-2 돌풍', names.map((n, i) => `${i + 11} ${n}`));
     await t.fill('#p-no', '99'); await t.fill('#p-name', '추가선수'); await btn(t, '추가').click();
-    assert.match(await text(t), /선수 9명 · 선발 5 \/ 교체 4/);
+    assert.match(await text(t), /선수 9명 · 선발 5\/5 · 후보 4/);
     await t.getByRole('button', { name: '추가선수 지우기' }).click();
     assert.match(await text(t), /선수 8명/);
     await shot(t, '04-teams');
@@ -190,7 +194,7 @@ try {
     await t.goto(`${base}#home`);
     assert.equal(await t.locator('.nav a:not(.navbrand)').count(), 3, '메뉴는 홈·경기·대회 설정');
     await t.locator('.submenu a', { hasText: '종목·규칙' }).click();
-    await t.waitForSelector('text=6학년 종목·규칙');
+    await t.waitForSelector('.submenu a.on:has-text("종목·규칙")');
     await t.getByRole('button', { name: '교체 카드 늘리기' }).click();
     await t.waitForSelector('text=4장');
     await t.selectOption('#g-sport', 'netball');
@@ -301,16 +305,16 @@ try {
     assert.match(await t.locator('.tcard').first().innerText(), /내가 만든 대회[\s\S]*햇살초 리그[\s\S]*6학년 풋살[\s\S]*경기 \d+개/);
     await shot(t, '19-list');
     await t.getByRole('button', { name: /햇살초 리그/ }).click();
-    await t.waitForSelector('text=학생용 화면 QR');
+    await t.waitForSelector('text=대회 목록');
     await t.reload();
-    await t.waitForSelector('text=학생용 화면 QR');
+    await t.waitForSelector('text=대회 목록');
   });
 
   await step('학교 명단(선택): 반 등록, 팀 명단에서 체크해서 불러오기', async () => {
     await t.goto(`${base}#home`);
-    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('[data-act="pickGrade"]', { hasText: '6학년' }).click();
     await t.locator('.submenu a', { hasText: '팀 명단' }).click();
-    await t.waitForSelector('text=6학년 팀 명단');
+    await t.waitForSelector('.submenu a.on:has-text("팀 명단")');
     await btn(t, '학교 명단에서 불러오기').click();
     await t.waitForSelector('text=학교 명단이 아직 없습니다');
     await sbtn(t, '학교 명단 등록하러 가기').click();
@@ -324,9 +328,9 @@ try {
     await t.fill('#s-name', '선유나'); await btn(t, '추가').click();
     await t.waitForSelector('text=5명');
     await t.goto(`${base}#home`);
-    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('[data-act="pickGrade"]', { hasText: '6학년' }).click();
     await t.locator('.submenu a', { hasText: '팀 명단' }).click();
-    await t.waitForSelector('text=6학년 팀 명단');
+    await t.waitForSelector('.submenu a.on:has-text("팀 명단")');
     const before = Number((await text(t)).match(/선수 (\d+)명/)[1]);
     await btn(t, '학교 명단에서 불러오기').click();
     await t.waitForSelector('#im-class');
@@ -399,7 +403,7 @@ try {
     await t.goto(`${base}#teams`);
     await t.getByRole('button', { name: '티볼 가', exact: true }).click();
     await t.fill('#p-name', '라라'); await btn(t, '추가').click();
-    await t.waitForSelector('text=선수 4명 · 선발 3 / 교체 1');
+    await t.waitForSelector('text=선수 4명 · 선발 3/');
     await addGameAndOpen();
     await t.waitForSelector('text=타순을 아직 안 냄');
     const gid = (await t.evaluate(() => location.hash)).split('/')[1];
@@ -458,15 +462,15 @@ try {
   });
 
   await step('경기 일정: 날짜와 교시 넣기, 시간으로 바꾸기, 학생 화면에 보임', async () => {
-    await t.goto(`${base}#home`);
-    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.goto(`${base}#games`);
+    await t.locator('[data-act="pickGrade"]', { hasText: '6학년' }).click();
     await t.getByRole('button', { name: '+ 경기 추가' }).click();
     await t.fill('#w-date', '2026-11-20'); await t.selectOption('#w-period', '3교시');
     await sbtn(t, '추가').click();
     await t.waitForSelector('text=예정 · 11월 20일(금) 3교시');
     await s.reload(); await s.getByRole('button', { name: '경기 결과' }).click();
     assert.match(await text(s), /예정 · 11월 20일\(금\) 3교시/);
-    await t.locator('a.game').last().click();
+    await t.locator('a.game:not(.other)').last().click();
     await btn(t, '일정 바꾸기').click();
     await t.fill('#w-hour', '9'); await t.locator('#w-hour').blur();
     assert.deepEqual([await t.inputValue('#w-ampm'), await t.inputValue('#w-min')], ['am', '00']);
@@ -482,71 +486,95 @@ try {
   });
 
   await step('끝난 경기 지우기: 순위표와 기록에서도 빠짐', async () => {
-    await t.goto(`${base}#home`);
-    await t.locator('a.game').first().click();
+    await t.goto(`${base}#games`);
+    await t.locator('a.game:not(.other)').first().click();
     await t.waitForSelector('text=최종 점수');
     await btn(t, '이 경기 지우기').click();
     await t.waitForSelector('text=순위표와 개인 기록에서도 빠집니다');
     await sbtn(t, '지우기').click();
     await t.waitForSelector('text=학생용 화면 QR');
-    assert.equal(await t.locator('a.game').count(), 1);
+    assert.equal(await t.locator('a.game:not(.other)').count(), 1);
     await s.waitForFunction(() => !/순위표[\s\S]*6-1 번개\s*1\s*1/.test(document.body.innerText));
     assert.match(await text(s), /6-1 번개\s*0\s*0\s*0\s*0\s*0/);
   });
 
-  await step('선발 인원 제한: 넘게 고르면 안내 창, 설정보다 많으면 맞추기 단추, 시작도 막힘', async () => {
+  await step('선발 인원 제한: 넘게 고르면 안내 창, 설정보다 많으면 번호 순으로만 선발 표시, 맞추기 단추', async () => {
     await t.goto(`${base}#home`);
-    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('[data-act="pickGrade"]', { hasText: '6학년' }).click();
     await t.locator('.submenu a', { hasText: '팀 명단' }).click();
     await t.getByRole('button', { name: '6-1 번개', exact: true }).click();
-    await t.waitForSelector('text=선발 5 /');
-    await t.locator('.prow .seg button[data-bench="0"]:not(.on)').first().click();
+    await t.waitForSelector('text=선발 5/5');
+    await t.locator('.prow .seg button[data-slot="on"]:not(.on)').first().click();
     await t.waitForSelector('text=선발은 5명까지입니다');
     await sbtn(t, '확인').click();
-    await t.waitForSelector('text=선발 5 /');
+    await t.waitForSelector('text=선발 5/5');
     await t.goto(`${base}#rules`);
     await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
     await t.waitForSelector('text=4명');
-    await t.goto(`${base}#home`);
-    await t.locator('a.game').first().click();
+    await t.goto(`${base}#games`);
+    await t.locator('a.game:not(.other)').first().click();
+    await t.waitForSelector('text=팀 명단에서 맞춰야 시작할 수 있습니다');
     await btn(t, '경기 시작').click();
-    await t.waitForSelector('text=선발 인원이 설정보다 많습니다');
+    await t.waitForSelector('text=명단이 설정과 달라 시작할 수 없습니다');
+    assert.match(await t.locator('#sheet').innerText(), /선발이 5명입니다\(설정 4명\)/);
     await sbtn(t, '확인').click();
     assert.ok(await btn(t, '경기 시작').count(), '시작되지 않아야 함');
     await t.goto(`${base}#teams`);
     await t.getByRole('button', { name: '6-1 번개', exact: true }).click();
-    await t.waitForSelector('text=풋살 선발은 4명까지입니다');
-    await btn(t, '번호 순으로 4명만 선발로').click();
-    await t.waitForSelector('text=선발 4 /');
-    assert.equal(await t.locator('text=선발은 4명까지입니다').count(), 0);
+    await t.waitForSelector('text=맞춰야 경기를 시작할 수 있습니다');
+    await btn(t, '번호 순으로 맞추기').click();
+    await t.waitForSelector('text=선발 4/4');
+    assert.equal(await t.locator('text=맞춰야 경기를 시작할 수 있습니다').count(), 0);
+    // 후보 인원: 정해 두면 넘는 선수는 맞추기에서 빠짐이 되고, 후보로 더 못 넣는다
+    await t.goto(`${base}#rules`);
+    await t.getByRole('button', { name: '후보 인원 늘리기' }).click();
+    await t.goto(`${base}#teams`);
+    await t.getByRole('button', { name: '6-1 번개', exact: true }).click();
+    await t.waitForSelector('text=후보가');
+    await btn(t, '번호 순으로 맞추기').click();
+    await t.waitForSelector('text=후보 1/1');
+    await t.locator('.prow .seg button[data-slot="bench"]:not(.on)').first().click();
+    await t.waitForSelector('text=후보는 1명까지입니다');
+    await sbtn(t, '확인').click();
+    await t.goto(`${base}#rules`);
+    await t.getByRole('button', { name: '후보 인원 줄이기' }).click();
   });
 
-  await step('홈에서 학년 지우기: 그 학년의 팀·경기도 함께 지워짐', async () => {
+  await step('홈에서 학년 지우기: 확인 창, 15초 되돌리기, 팀·경기도 함께 지워짐', async () => {
     await t.goto(`${base}#home`);
-    await t.getByRole('button', { name: /^1학년/ }).click();
+    await t.locator('[data-act="pickGrade"]', { hasText: '1학년' }).click();
     await btn(t, '학년 지우기').click();
-    await t.waitForSelector('text=이 학년의 팀, 경기, 기록이 모두 지워집니다');
-    await sbtn(t, '지우기').click();
+    await t.waitForSelector('text=지운 뒤 15초 동안은 되돌릴 수 있습니다');
+    await sbtn(t, '1학년 지우기').click();
     await t.waitForFunction(() => !/1학년 넷볼/.test(document.querySelector('.chips').innerText));
-    assert.match(await t.locator('.chips').innerText(), /6학년 풋살/);
+    // 15초 안에는 되돌리기: 팀과 경기까지 돌아옴
+    await t.locator('#toast .undo').click({ force: true });
+    await t.waitForFunction(() => /1학년 넷볼/.test(document.querySelector('.chips').innerText));
+    await t.goto(`${base}#games`);
+    await t.waitForSelector('a.game:not(.other)');
+    await t.goto(`${base}#home`);
+    await btn(t, '학년 지우기').click();
+    await sbtn(t, '1학년 지우기').click();
+    await t.waitForFunction(() => !/1학년 넷볼/.test(document.querySelector('.chips').innerText));
+    assert.match(await t.locator('.chips').first().innerText(), /6학년 풋살/);
   });
 
   await step('PC 화면: 메뉴는 왼쪽, 내용은 두 칸', async () => {
     await t.setViewportSize({ width: 1280, height: 800 });
-    await t.goto(`${base}#home`);
+    await t.goto(`${base}#games`);
     await t.waitForSelector('text=학생용 화면 QR');
     const nav = await t.locator('.nav').boundingBox();
     assert.ok(nav.x < 100 && nav.height > 600 && nav.width < 260, '메뉴가 왼쪽 세로로 있어야 함');
     const cols = await t.locator('.cols > .col').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
     assert.ok(cols[1] - cols[0] > 300, '두 칸이 나란히 있어야 함');
     await shot(t, '20-pc-home');
-    await t.locator('a.game').first().click();
+    await t.locator('a.game:not(.other)').first().click();
     await t.waitForSelector('.cols .dark');
     await shot(t, '21-pc-game');
     await t.goto(`${base}#records`); await shot(t, '22-pc-records');
     await t.goto(`${base}#teams`); await shot(t, '23-pc-teams');
     await t.locator('.navbrand').click();
-    await t.waitForSelector('text=학생용 화면 QR');
+    await t.waitForSelector('text=대회 목록');
     assert.equal(await t.evaluate(() => location.hash), '#home', '왼쪽 위 이름을 누르면 홈으로');
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);

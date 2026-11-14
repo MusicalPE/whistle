@@ -26,7 +26,8 @@ export function gradeFromSport(sport, label) {
   return {
     label, sport: SPORTS[sport] ? sport : 'custom', sportName: '', format: p.format,
     minutes: p.minutes || 10, sets: p.sets || 3, setPoints: p.setPoints || 25, innings: p.innings || 3,
-    starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
+    // subs: 후보(교체) 인원. 0이면 제한 없음.
+    starters: p.starters, subs: 0, cards: p.cards, reentry: false, steps: p.steps,
     // assist: 득점할 때 어시스트한 선수도 고른다(시간제 종목).
     assist: !!p.assist,
     // outDetail: 피구에서 누가 아웃됐고 누가 아웃시켰는지까지 고른다. 끄면 인원만 센다.
@@ -128,6 +129,13 @@ const playerLabel = (ctx, team, pid) => {
 // ctx: { now, uid, names: {a,b}, rosters: {a: {pid: {no,name,bench}}, b: {...}} }
 // 아래 함수는 모두 경기(g)를 그 자리에서 고치고, 남길 기록 목록을 돌려준다.
 
+// 선발로 서는 선수: 명단에서 '선발'인 선수 가운데 번호 순으로 설정의 선발 인원까지. 넘는 선수는 교체로 둔다.
+export function starterIds(roster, n) {
+  return Object.entries(roster || {}).filter(([, p]) => !p.bench && !p.off)
+    .sort(([, a], [, b]) => (Number(a.no) || 0) - (Number(b.no) || 0) || String(a.name).localeCompare(String(b.name), 'ko'))
+    .slice(0, Math.max(1, Number(n) || 1)).map(([pid]) => pid);
+}
+
 export function start(g, grade, ctx) {
   norm(g, grade);
   if (g.status !== 'ready') throw new Error('이미 시작한 경기입니다.');
@@ -137,8 +145,10 @@ export function start(g, grade, ctx) {
     const roster = (ctx.rosters || {})[side] || {};
     const list = ((ctx.orders || {})[side] || {}).list;
     if (grade.format === 'innings') sent[side] = [...new Set(Array.isArray(list) ? list : Object.values(list || {}))].filter((pid) => roster[pid]);
+    const first = starterIds(roster, grade.starters);
     for (const pid of Object.keys(roster)) {
-      const on = sent[side].length ? sent[side].includes(pid) : !roster[pid].bench;
+      if (roster[pid].off && !sent[side].includes(pid)) continue; // 명단에서 뺀 선수는 이 경기에 나오지 않는다
+      const on = sent[side].length ? sent[side].includes(pid) : first.includes(pid);
       g.lineup[side][pid] = on ? 'on' : 'bench';
       if (on) g.st[side][pid] = true;
     }

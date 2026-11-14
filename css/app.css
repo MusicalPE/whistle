@@ -71,6 +71,9 @@ h1, h2, p { margin: 0; }
 
 .submenu { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 10px 20px 0; padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .submenu .label { margin-right: 6px; }
+.tabbody { padding-top: 6px; }
+.grid2 .btn.sm { white-space: nowrap; font-size: 13px; padding: 0 6px; }
+.submenu a.on { background: var(--ink); color: #fff; }
 .submenu .del { margin-left: auto; height: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--sub); font-size: 13px; font-weight: 700; text-decoration: underline; }
 .submenu a { height: 44px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--ink); text-decoration: none; border: 1px solid var(--ink); }
 .hero { display: flex; align-items: center; gap: 16px; padding: 28px 20px 22px; border-bottom: 1px solid var(--line); background: #fff; }
@@ -160,6 +163,7 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .sheet h2 { font-size: 20px; font-weight: 900; }
 #toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: 30; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700; max-width: 90vw; text-align: center; }
 #toast:empty { display: none; }
+#toast .undo { margin-left: 10px; height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 900; }
 .demo { background: #FFF4E5; border-bottom: 1px solid #F0C48A; color: #7A3E00; font-size: 12px; font-weight: 700; padding: 6px 20px; text-align: center; }
 .foot { padding: 16px 20px 20px; font-size: 12px; color: var(--sub); text-align: center; }
 
@@ -202,6 +206,7 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .colgap { margin-top: 0; }
   .app.narrow > *:not(.nav):not(.demo) { max-width: 680px; }
+  .tabbody.narrowin > * { max-width: 680px; }
   .chips { flex-wrap: wrap; overflow: visible; }
   #sheet { justify-content: center; }
   .sheet { border-radius: 18px; }
