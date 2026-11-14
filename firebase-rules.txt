@@ -16,6 +16,17 @@
             ".write": "auth != null && data.exists() && newData.exists() && root.child('m').child($tid).child(auth.uid).exists()"
           }
         },
+        "orders": {
+          ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid",
+          "$game": {
+            "$side": {
+              ".write": "($side === 'a' || $side === 'b') && root.child('t').child($tid).child('games').child($game).child('status').val() === 'ready'",
+              "list": { "$i": { ".validate": "newData.isString() && newData.val().length < 60" } },
+              "at": { ".validate": "newData.isNumber()" },
+              "$other": { ".validate": false }
+            }
+          }
+        },
         "logs": {
           ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid",
           "$game": {

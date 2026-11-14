@@ -225,8 +225,11 @@ test('이닝제: 수비 팀은 점수를 올릴 수 없고, 정정(-1)은 된다
 test('경기 일정 글씨: 날짜·교시·시간은 모두 선택', () => {
   assert.equal(L.whenText({}), '');
   assert.equal(L.whenText({ date: '2026-11-20', period: '3교시' }), '11월 20일(금) 3교시');
-  assert.equal(L.whenText({ date: '2026-11-20', time: '09:30', period: '3교시' }), '11월 20일(금) 09시 30분');
-  assert.equal(L.whenText({ time: '14:00' }), '14시');
+  assert.equal(L.whenText({ date: '2026-11-20', time: '09:30', period: '3교시' }), '11월 20일(금) 오전 9시 30분');
+  assert.equal(L.whenText({ time: '14:00' }), '오후 2시');
+  assert.equal(L.whenText({ time: '23:05' }), '오후 11시 5분');
+  assert.equal(L.whenText({ time: '00:30' }), '오전 12시 30분');
+  assert.equal(L.whenText({ time: '12:00' }), '오후 12시');
   assert.equal(L.whenText({ period: '점심시간' }), '점심시간');
   assert.equal(L.whenText({ date: '2026-03-02' }), '3월 2일(월)');
 });
@@ -308,4 +311,18 @@ test('티볼 타석 기록: 개인 기록(타석·안타·타점·득점), 선�
   L.start(g2, grade, ctxAt(0, { rosters: { a: {}, b: {} } }));
   assert.equal(g2.detail, false);
   assert.throws(() => L.bat(g2, grade, c(1), 'h1'), /타석 기록을 쓰지 않는/);
+});
+
+test('티볼: 미리 받은 타순대로 선발과 타순이 정해진다', () => {
+  const grade = { ...L.gradeFromSport('teeball', '4학년'), detail: true };
+  const g = L.newGame('g4', 1, 'ta', 'tb');
+  const rosters = { a: roster(5, 3), b: roster(5, 3) };
+  L.start(g, grade, ctxAt(0, { rosters, orders: { a: { list: ['p4', 'p1', 'p9', 'p4', 'p2'], at: 1 } } }));
+  assert.deepEqual(g.order.a, ['p4', 'p1', 'p2'], '없는 선수와 겹친 선수는 빠짐');
+  assert.deepEqual([g.lineup.a.p4, g.lineup.a.p3, g.st.a.p4, g.st.a.p3], ['on', 'bench', true, undefined]);
+  assert.deepEqual(g.order.b, ['p1', 'p2', 'p3'], '안 낸 팀은 선발이 번호 순');
+  assert.equal(L.batterOf(g), 'p4');
+  const g2 = L.newGame('g6', 1, 'ta', 'tb');
+  L.start(g2, L.gradeFromSport('futsal', '6학년'), ctxAt(0, { rosters, orders: { a: { list: ['p4'] } } }));
+  assert.equal(g2.lineup.a.p4, 'bench', '이닝제가 아니면 타순 제출을 쓰지 않음');
 });

@@ -119,10 +119,14 @@ const playerLabel = (ctx, team, pid) => {
 export function start(g, grade, ctx) {
   norm(g, grade);
   if (g.status !== 'ready') throw new Error('이미 시작한 경기입니다.');
+  // 이닝제에서 학생이 미리 낸 타순(ctx.orders)이 있으면, 그 선수들이 그 순서대로 선발이 된다.
+  const sent = { a: [], b: [] };
   for (const side of ['a', 'b']) {
     const roster = (ctx.rosters || {})[side] || {};
+    const list = ((ctx.orders || {})[side] || {}).list;
+    if (grade.format === 'innings') sent[side] = [...new Set(Array.isArray(list) ? list : Object.values(list || {}))].filter((pid) => roster[pid]);
     for (const pid of Object.keys(roster)) {
-      const on = !roster[pid].bench;
+      const on = sent[side].length ? sent[side].includes(pid) : !roster[pid].bench;
       g.lineup[side][pid] = on ? 'on' : 'bench';
       if (on) g.st[side][pid] = true;
     }
@@ -132,10 +136,10 @@ export function start(g, grade, ctx) {
   }
   g.status = 'live'; g.startedAt = ctx.now; g.cur = 0; g.half = 0;
   if (grade.format === 'innings') {
-    // 타순은 선발 선수의 번호 순. 두 팀 모두 선발이 있어야 타석 기록을 쓸 수 있다.
+    // 타순은 미리 받은 타순, 없으면 선발 선수의 번호 순. 두 팀 모두 선발이 있어야 타석 기록을 쓸 수 있다.
     for (const side of ['a', 'b']) {
       const roster = (ctx.rosters || {})[side] || {};
-      g.order[side] = Object.keys(g.lineup[side]).filter((pid) => g.lineup[side][pid] === 'on').sort((x, y) => (Number(roster[x].no) || 0) - (Number(roster[y].no) || 0) || String(roster[x].name).localeCompare(String(roster[y].name), 'ko'));
+      g.order[side] = sent[side].length ? sent[side] : Object.keys(g.lineup[side]).filter((pid) => g.lineup[side][pid] === 'on').sort((x, y) => (Number(roster[x].no) || 0) - (Number(roster[y].no) || 0) || String(roster[x].name).localeCompare(String(roster[y].name), 'ko'));
     }
     g.detail = !!grade.detail && g.order.a.length > 0 && g.order.b.length > 0;
   }
@@ -164,7 +168,7 @@ export function timeUp(g, grade, ctx) {
 // 이닝제에서 지금 공격하는 팀. 초에는 먼저 적은 팀(a), 말에는 나중 팀(b).
 export const attacker = (g) => (g.half ? 'b' : 'a');
 
-// 경기 일정 글씨. 날짜와 교시(또는 시간)는 모두 선택이다. 예: "11월 20일(금) 3교시", "11월 20일(금) 09시 30분"
+// 경기 일정 글씨. 날짜와 교시(또는 시간)는 모두 선택이다. 예: "11월 20일(금) 3교시", "11월 20일(금) 오전 9시 30분"
 export function whenText(g) {
   const out = [];
   if (g.date) {
@@ -172,7 +176,10 @@ export function whenText(g) {
     const day = new Date(y, m - 1, d);
     if (!Number.isNaN(day.getTime())) out.push(`${m}월 ${d}일(${'일월화수목금토'[day.getDay()]})`);
   }
-  if (g.time) { const [h, min] = String(g.time).split(':'); out.push(min === '00' ? `${h}시` : `${h}시 ${min}분`); }
+  if (g.time) {
+    const [h, min] = String(g.time).split(':').map(Number);
+    out.push(`${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${min ? ` ${min}분` : ''}`);
+  }
   else if (g.period) out.push(String(g.period));
   return out.join(' ');
 }

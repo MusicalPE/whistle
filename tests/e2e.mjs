@@ -351,6 +351,30 @@ try {
     await shot(t, '15-teeball-records');
   });
 
+  await step('타순 제출: 학생이 QR 주소로 타순을 내면 그 순서대로 경기가 시작됨', async () => {
+    await addGameAndOpen();
+    await t.waitForSelector('text=타순을 아직 안 냄');
+    const gid = (await t.evaluate(() => location.hash)).split('/')[1];
+    await btn(t, '타순 제출 QR 띄우기').click();
+    assert.ok(await t.locator('#sheet .qr svg').count());
+    await sbtn(t, '닫기').click();
+    const o = await ctx.newPage(); watch(o, '타순 제출');
+    await o.goto(`${base}?o=${tid}&g=${gid}`);
+    await o.getByRole('button', { name: '티볼 가' }).click();
+    assert.ok(await o.getByRole('button', { name: /타순 제출 \(0명\)/ }).isDisabled());
+    for (const name of ['다온', '가람']) await o.getByRole('button', { name: new RegExp(name) }).click();
+    await shot(o, '16-order');
+    await o.getByRole('button', { name: '타순 제출 (2명)' }).click();
+    await o.waitForSelector('text=타순을 냈습니다');
+    await t.waitForFunction(() => /받은 타순\s*1번 3 다온\s*2번 1 가람\s*교체\s*2 나래/.test(document.querySelector('#app').innerText));
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('text=지금 타자 · 1번');
+    assert.equal(await t.locator('[data-batter]').innerText(), '3 다온');
+    await o.reload();
+    await o.waitForSelector('text=이미 시작한 경기라 타순을 바꿀 수 없습니다');
+    await o.close();
+  });
+
   await step('경기 일정: 날짜와 교시 넣기, 시간으로 바꾸기, 학생 화면에 보임', async () => {
     await t.goto(`${base}#home`);
     await t.getByRole('button', { name: /^6학년/ }).click();
@@ -362,9 +386,17 @@ try {
     assert.match(await text(s), /예정 · 11월 20일\(금\) 3교시/);
     await t.locator('a.game').last().click();
     await btn(t, '일정 바꾸기').click();
-    await t.fill('#w-time', '09:30'); await sbtn(t, '저장').click();
-    await t.waitForSelector('text=11월 20일(금) 09시 30분');
-    await s.waitForFunction(() => /11월 20일\(금\) 09시 30분/.test(document.body.innerText));
+    await t.fill('#w-hour', '9'); await t.locator('#w-hour').blur();
+    assert.deepEqual([await t.inputValue('#w-ampm'), await t.inputValue('#w-min')], ['am', '00']);
+    await t.fill('#w-min', '30'); await sbtn(t, '저장').click();
+    await t.waitForSelector('text=11월 20일(금) 오전 9시 30분');
+    await s.waitForFunction(() => /11월 20일\(금\) 오전 9시 30분/.test(document.body.innerText));
+    await btn(t, '일정 바꾸기').click();
+    assert.deepEqual([await t.inputValue('#w-ampm'), await t.inputValue('#w-hour'), await t.inputValue('#w-min')], ['am', '9', '30']);
+    await t.fill('#w-hour', '23'); await t.locator('#w-hour').blur();
+    assert.deepEqual([await t.inputValue('#w-ampm'), await t.inputValue('#w-hour')], ['pm', '11'], '23시는 오후 11시로 바뀌어야 함');
+    await t.fill('#w-min', '0'); await sbtn(t, '저장').click();
+    await t.waitForSelector('text=11월 20일(금) 오후 11시');
   });
 
   await step('끝난 경기 지우기: 순위표와 기록에서도 빠짐', async () => {
