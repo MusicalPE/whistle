@@ -10,6 +10,7 @@ const BASE = location.origin + location.pathname;
 const S = {
   store: null, tid: null, T: null, M: {}, my: [], gid: null, sheet: null, tab: 'live', teamId: null,
   sub: {}, rec: { team: '', sort: 'goals', key: null }, boardGame: null, off: [], dirty: false, code: '',
+  school: {}, classId: null, offSchool: null,
 };
 
 // ---------- 자료 읽기 ----------
@@ -31,6 +32,19 @@ const ctxFor = (g) => ({
   now: S.store.now(), uid: uid(), names: { a: teamName(g.a), b: teamName(g.b) },
   rosters: { a: ((T().teams || {})[g.a] || {}).players || {}, b: ((T().teams || {})[g.b] || {}).players || {} },
 });
+// 학교 명단(선택): 내 계정에만 저장되는 학년·반 명단. 팀 명단을 만들 때 체크해서 불러온다.
+const schoolPath = () => `u/${uid()}/school`;
+const classList = () => Object.entries(S.school || {}).map(([id, c]) => ({ id, ...c })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko', { numeric: true }));
+const studentsOf = (cid) => Object.entries(((S.school || {})[cid] || {}).students || {}).map(([sid, p]) => ({ sid, ...p })).sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0) || String(a.name).localeCompare(String(b.name), 'ko'));
+// "번호 이름" 줄들을 읽는다. 번호가 없으면 이어서 매긴다.
+function parseLines(text, lastNo) {
+  let n = lastNo;
+  return text.split(/\n/).map((x) => x.trim()).filter(Boolean).slice(0, 60).map((line) => {
+    const m = line.match(/^(\d{1,3})[\s.,번)-]*(.+)$/);
+    if (m) n = Math.max(n, Number(m[1]));
+    return { no: m ? m[1] : String(++n), name: (m ? m[2] : line).trim().slice(0, 12) };
+  });
+}
 const lineupOf = (g, side, state) => playersOf(g[side]).filter((p) => g.lineup[side][p.pid] === state);
 const statusText = (g) => (g.status === 'ready' ? '예정' : g.status === 'done' ? '종료' : g.clock && !g.clock.run ? '멈춤' : '진행 중');
 const scoreText = (g) => (g.status === 'ready' ? 'vs' : `${g.sa} : ${g.sb}`);
@@ -247,7 +261,8 @@ function teamsScreen() {
 <div class="set" style="border-bottom:1px solid var(--line)"><span class="muted small">선수 ${ps.length}명 · 선발 ${starters} / 교체 ${ps.length - starters}${starters !== Number(gr.starters) ? ` · 설정의 선발 인원은 ${gr.starters}명` : ''}</span></div>
 ${ps.map((p) => `<div class="prow"><span class="no">${esc(p.no)}</span><span class="grow">${esc(p.name)}</span><div class="seg"><button class="${p.bench ? '' : 'on'}" data-act="setBench" data-pid="${p.pid}" data-bench="0" aria-pressed="${!p.bench}">선발</button><button class="${p.bench ? 'on' : ''}" data-act="setBench" data-pid="${p.pid}" data-bench="1" aria-pressed="${!!p.bench}">교체</button></div><button class="x" data-act="delPlayer" data-pid="${p.pid}" aria-label="${esc(p.name)} 지우기">×</button></div>`).join('')}
 <div class="prow" style="gap:6px;padding:8px"><input id="p-no" class="input" style="width:64px" inputmode="numeric" placeholder="번호" maxlength="3" aria-label="등번호"><input id="p-name" class="input" placeholder="이름" maxlength="12" aria-label="선수 이름" data-enter="addPlayer"><button class="btn sm primary" data-act="addPlayer">추가</button></div>
-<div class="grid2" style="padding:0 8px 10px"><button class="btn sm" data-act="pasteAsk">명단 붙여넣기</button><button class="btn sm plain" data-act="delTeam">이 팀 지우기</button></div></section>` : `<p class="note pad mt">"+ 팀 추가"로 팀을 만들어 주세요.</p>`;
+<div class="grid2" style="padding:0 8px 8px"><button class="btn sm" data-act="importAsk">학교 명단에서 불러오기</button><button class="btn sm" data-act="pasteAsk">명단 붙여넣기</button></div>
+<div class="center" style="padding-bottom:6px"><button class="btn sm plain" data-act="delTeam">이 팀 지우기</button></div></section>` : `<p class="note pad mt">"+ 팀 추가"로 팀을 만들어 주세요.</p>`;
   return `<div class="app narrow">${demoBar()}<header class="top" style="flex-direction:row;align-items:center;justify-content:space-between"><h1 class="title" style="font-size:22px">팀 명단</h1>${gradeSelect()}</header>
 <div class="chips">${ids.map((id) => `<button class="chip${id === S.teamId ? ' on' : ''}" data-act="pickTeam" data-id="${id}">${esc(teams[id].name)}</button>`).join('')}<button class="chip dash" data-act="addTeam">+ 팀 추가</button></div>${card}
 <p class="note pad" style="padding-top:10px;padding-bottom:16px">선발과 교체는 경기 전에 정해 두면, 경기를 시작할 때 그대로 적용됩니다.</p>${nav('teams')}</div>`;
@@ -278,8 +293,22 @@ ${L.isTimed(gr) ? `<div class="set"><span>득점 단추</span>${seg('steps', gr.
   }
   return `<div class="app narrow">${demoBar()}<header class="top" style="flex-direction:row;align-items:center;justify-content:space-between"><h1 class="title" style="font-size:22px">경기 설정</h1>${gr ? gradeSelect() : ''}</header>
 <h2 class="label" style="padding:6px 20px">대회 (모든 학년 공통)</h2><section class="card" style="margin:0 20px"><div class="set"><label for="t-title">대회 이름</label><input id="t-title" class="input" value="${esc(T().meta.name)}" maxlength="40" data-change="tName"></div></section>
+<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#school">학교 명단 등록 (선택)</a><p class="note" style="padding-top:6px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다.</p></div>
 ${rules || '<p class="note pad mt">홈에서 학년을 먼저 추가해 주세요.</p>'}
 <div class="center mt"><button class="btn plain" data-act="signOut">${S.store.demo ? '미리보기 끝내기' : '구글 계정 로그아웃'}</button></div><div class="foot">음악적체육인 · v${VERSION}</div>${nav('settings')}</div>`;
+}
+
+function schoolScreen() {
+  const list = classList();
+  if (!S.school[S.classId]) S.classId = (list[0] || {}).id || null;
+  const c = S.school[S.classId], ps = c ? studentsOf(S.classId) : [];
+  const card = c ? `<section class="card" style="margin:12px 20px 0"><div class="set" style="border-bottom:1px solid var(--line)"><b>${esc(c.name)}</b><span class="muted small" style="margin-right:6px">${ps.length}명</span></div>
+${ps.map((p) => `<div class="prow"><span class="no">${esc(p.no)}</span><span class="grow">${esc(p.name)}</span><button class="x" data-act="delStudent" data-sid="${p.sid}" aria-label="${esc(p.name)} 지우기">×</button></div>`).join('')}
+<div class="prow" style="gap:6px;padding:8px"><input id="s-no" class="input" style="width:64px" inputmode="numeric" placeholder="번호" maxlength="3" aria-label="번호"><input id="s-name" class="input" placeholder="이름" maxlength="12" aria-label="학생 이름" data-enter="addStudent"><button class="btn sm primary" data-act="addStudent">추가</button></div>
+<div class="grid2" style="padding:0 8px 10px"><button class="btn sm" data-act="pasteSchoolAsk">명단 붙여넣기</button><button class="btn sm plain" data-act="delClassAsk">이 반 지우기</button></div></section>` : `<p class="note pad mt">"+ 반 추가"로 반을 만들어 주세요.</p>`;
+  return `<div class="app narrow">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#settings">‹ 설정</a><h1>학교 명단 <span class="muted" style="font-size:13px;font-weight:500">· 선택</span></h1></header>
+<p class="note pad" style="padding-bottom:10px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다. 쓰지 않아도 됩니다. 이 명단은 내 계정에만 저장되고, 학생 화면이나 다른 선생님에게는 보이지 않습니다.</p>
+<div class="chips">${list.map((x) => `<button class="chip${x.id === S.classId ? ' on' : ''}" data-act="pickClass" data-id="${x.id}">${esc(x.name)}</button>`).join('')}<button class="chip dash" data-act="addClass">+ 반 추가</button></div>${card}<div style="height:16px"></div>${nav('settings')}</div>`;
 }
 
 function membersScreen() {
@@ -411,7 +440,15 @@ function sheetHtml() {
     const opts = Object.entries(teamsOf(grade().id)).map(([id, t]) => `<option value="${id}">${esc(t.name)}</option>`);
     return `<div class="sheet" role="dialog"><h2>경기 추가</h2><div class="grid2"><div class="field"><label class="label" for="ng-a">팀 1</label><select id="ng-a" class="input">${opts.join('')}</select></div><div class="field"><label class="label" for="ng-b">팀 2</label><select id="ng-b" class="input">${opts.slice(1).concat(opts.slice(0, 1)).join('')}</select></div></div><button class="btn primary big" data-act="saveGame">추가</button>${close}</div>`;
   }
-  if (s.type === 'paste') return `<div class="sheet" role="dialog"><h2>명단 붙여넣기</h2><p class="note">한 줄에 한 명씩 "번호 이름"으로 적습니다. 번호가 없으면 순서대로 매깁니다. 앞에서부터 선발 인원만큼 선발이 됩니다.</p><textarea id="paste" class="input" placeholder="3 강태윤&#10;5 한지우&#10;7 오세린" aria-label="명단"></textarea><button class="btn primary big" data-act="savePaste">명단에 넣기</button>${close}</div>`;
+  if (s.type === 'class') return `<div class="sheet" role="dialog"><h2>반 추가</h2><div class="field"><label class="label" for="nc-name">반 이름</label><input id="nc-name" class="input" placeholder="예: 6학년 1반" maxlength="20" data-enter="saveClass"></div><button class="btn primary big" data-act="saveClass">추가</button>${close}</div>`;
+  if (s.type === 'import') {
+    const ps = studentsOf(s.cid), n = Object.keys(s.picked).length;
+    return `<div class="sheet" role="dialog" aria-label="학교 명단에서 불러오기"><h2>학교 명단에서 불러오기</h2><div class="field"><label class="label" for="im-class">반</label><select id="im-class" class="input" data-change="importClass">${classList().map((c) => `<option value="${c.id}"${c.id === s.cid ? ' selected' : ''}>${esc(c.name)} (${Object.keys(c.students || {}).length}명)</option>`).join('')}</select></div>
+<div class="row between"><span class="label">${esc(teamName(S.teamId))}에 넣을 학생을 고르세요</span><button class="btn plain" style="height:44px;padding:0" data-act="importAll">${n && n === ps.length ? '모두 해제' : '모두 고르기'}</button></div>
+<div class="grid2" style="gap:8px">${ps.map((p) => `<button class="pl${s.picked[p.sid] ? ' on' : ''}" data-act="importTog" data-sid="${p.sid}" aria-pressed="${!!s.picked[p.sid]}"><b>${esc(p.no)}</b>${esc(p.name)}</button>`).join('') || '<p class="note">이 반에는 아직 학생이 없습니다.</p>'}</div>
+<button class="btn primary big" data-act="importGo"${n ? '' : ' disabled'}>${n}명 팀 명단에 넣기</button>${close}</div>`;
+  }
+  if (s.type === 'paste') return `<div class="sheet" role="dialog"><h2>명단 붙여넣기</h2><p class="note">한 줄에 한 명씩 "번호 이름"으로 적습니다. 번호가 없으면 순서대로 매깁니다.${s.to === 'school' ? '' : ' 앞에서부터 선발 인원만큼 선발이 됩니다.'}</p><textarea id="paste" class="input" placeholder="3 강태윤&#10;5 한지우&#10;7 오세린" aria-label="명단"></textarea><button class="btn primary big" data-act="savePaste">명단에 넣기</button>${close}</div>`;
   return '';
 }
 
@@ -431,6 +468,7 @@ function screenHtml() {
   if (r.name === 'records') return recordsScreen();
   if (r.name === 'teams' && isOwner()) return teamsScreen();
   if (r.name === 'settings' && isOwner()) return settingsScreen();
+  if (r.name === 'school' && isOwner()) return schoolScreen();
   return homeScreen();
 }
 
@@ -474,7 +512,10 @@ async function loadMy() {
 }
 async function afterAuth() {
   closeT(); S.tid = null;
+  if (S.offSchool) { S.offSchool(); S.offSchool = null; }
+  S.school = {};
   if (S.store.user) {
+    S.offSchool = S.store.on(schoolPath(), (v) => { S.school = v || {}; render(); });
     try { await loadMy(); } catch (e) { S.my = []; toast(friendly(e)); }
     const join = params.get('join');
     if (join) { S.code = join.toUpperCase(); history.replaceState(null, '', BASE); await actions.joinT(); }
@@ -614,16 +655,52 @@ const actions = {
   delPlayer(d) { return S.store.remove(`${teamPath()}/players/${d.pid}`); },
   pasteAsk() { openSheet({ type: 'paste' }); },
   async savePaste() {
-    const lines = val('paste').split(/\n/).map((x) => x.trim()).filter(Boolean); if (!lines.length) return toast('명단을 적어 주세요.');
-    const ps = playersOf(S.teamId); let n = Math.max(0, ...ps.map((p) => Number(p.no) || 0)), starters = ps.filter((p) => !p.bench).length;
+    const text = val('paste'); if (!text) return toast('명단을 적어 주세요.');
     const up = {};
-    for (const line of lines.slice(0, 40)) {
-      const m = line.match(/^(\d{1,3})[\s.,번)-]*(.+)$/);
-      const name = (m ? m[2] : line).trim().slice(0, 12), no = m ? m[1] : String(++n);
-      if (m) n = Math.max(n, Number(m[1]));
-      up[S.store.id()] = { no, name, bench: starters++ >= Number(grade().starters) };
+    if (S.sheet.to === 'school') {
+      for (const p of parseLines(text, Math.max(0, ...studentsOf(S.classId).map((x) => Number(x.no) || 0)))) up[S.store.id()] = p;
+      await S.store.update(`${schoolPath()}/${S.classId}/students`, up);
+    } else {
+      const ps = playersOf(S.teamId); let starters = ps.filter((p) => !p.bench).length;
+      for (const p of parseLines(text, Math.max(0, ...ps.map((x) => Number(x.no) || 0)))) up[S.store.id()] = { ...p, bench: starters++ >= Number(grade().starters) };
+      await S.store.update(`${teamPath()}/players`, up);
     }
-    await S.store.update(`${teamPath()}/players`, up); S.sheet = null; render(true);
+    S.sheet = null; render(true);
+  },
+  addClass() { openSheet({ type: 'class' }); },
+  async saveClass() {
+    const name = val('nc-name'); if (!name) return toast('반 이름을 적어 주세요.');
+    const id = S.store.id(); await S.store.set(`${schoolPath()}/${id}`, { name });
+    S.classId = id; S.sheet = null; render(true);
+  },
+  pickClass(d) { S.classId = d.id; render(true); },
+  delClassAsk() { openSheet({ type: 'confirm', title: `${S.school[S.classId].name} 명단을 지울까요?`, text: '이미 팀에 넣은 선수는 그대로 남습니다.', yes: '지우기', run: 'delClass' }); },
+  async delClass() { const id = S.classId; S.classId = null; await S.store.remove(`${schoolPath()}/${id}`); },
+  async addStudent() {
+    const name = val('s-name'); if (!name) return toast('학생 이름을 적어 주세요.');
+    const no = val('s-no') || String(Math.max(0, ...studentsOf(S.classId).map((p) => Number(p.no) || 0)) + 1);
+    await S.store.set(`${schoolPath()}/${S.classId}/students/${S.store.id()}`, { no, name });
+    render(true); const el = document.getElementById('s-name'); if (el) el.focus();
+  },
+  delStudent(d) { return S.store.remove(`${schoolPath()}/${S.classId}/students/${d.sid}`); },
+  pasteSchoolAsk() { openSheet({ type: 'paste', to: 'school' }); },
+  importAsk() {
+    const list = classList();
+    if (!list.length) return openSheet({ type: 'confirm', title: '학교 명단이 아직 없습니다', text: '설정의 "학교 명단 등록"에서 학년·반 명단을 먼저 등록하면, 여기서 체크해서 불러올 수 있습니다.', yes: '학교 명단 등록하러 가기', run: 'goSchool' });
+    return openSheet({ type: 'import', cid: list[0].id, picked: {} });
+  },
+  goSchool() { location.hash = 'school'; },
+  importTog(d) { const p = S.sheet.picked; if (p[d.sid]) delete p[d.sid]; else p[d.sid] = true; render(true); },
+  importAll() { const ps = studentsOf(S.sheet.cid); S.sheet.picked = Object.keys(S.sheet.picked).length === ps.length ? {} : Object.fromEntries(ps.map((p) => [p.sid, true])); render(true); },
+  async importGo() {
+    const cur = playersOf(S.teamId), have = new Set(cur.map((p) => `${p.no}/${p.name}`));
+    let starters = cur.filter((p) => !p.bench).length, n = 0; const up = {};
+    for (const p of studentsOf(S.sheet.cid).filter((x) => S.sheet.picked[x.sid])) {
+      if (have.has(`${p.no}/${p.name}`)) continue;
+      up[S.store.id()] = { no: String(p.no), name: p.name, bench: starters++ >= Number(grade().starters) }; n++;
+    }
+    if (n) await S.store.update(`${teamPath()}/players`, up);
+    S.sheet = null; render(true); toast(n ? `${n}명을 넣었습니다.` : '고른 학생이 이미 모두 들어 있습니다.');
   },
   async newCode() {
     const code = await freshCode();
@@ -648,6 +725,7 @@ const changes = {
   gradeSport(el) { const gr = grade(); S.store.update(gradePath(), { ...L.gradeFromSport(el.value, gr.label), sportName: gr.sportName || '' }); },
   recTeam(el) { S.rec.team = el.value; S.rec.key = null; render(true); },
   recSort(el) { S.rec.sort = el.value; render(true); },
+  importClass(el) { S.sheet.cid = el.value; S.sheet.picked = {}; render(true); },
 };
 
 // ---------- 시작 ----------

@@ -260,6 +260,39 @@ try {
     await t.waitForSelector('text=학생용 화면 QR');
   });
 
+  await step('학교 명단(선택): 반 등록, 팀 명단에서 체크해서 불러오기', async () => {
+    await t.goto(`${base}#teams`);
+    await t.selectOption('select[data-change="pickGrade"]', { label: '6학년' });
+    await btn(t, '학교 명단에서 불러오기').click();
+    await t.waitForSelector('text=학교 명단이 아직 없습니다');
+    await sbtn(t, '학교 명단 등록하러 가기').click();
+    await t.waitForSelector('text=학교 명단 · 선택');
+    await t.getByRole('button', { name: '+ 반 추가' }).click();
+    await t.fill('#nc-name', '6학년 1반'); await sbtn(t, '추가').click();
+    await btn(t, '명단 붙여넣기').click();
+    await t.fill('#paste', '21 노아린\n22 표민재\n23 길서우\n양도현'); await sbtn(t, '명단에 넣기').click();
+    await t.waitForSelector('text=4명');
+    assert.match(await text(t), /24\s*양도현/);
+    await t.fill('#s-name', '선유나'); await btn(t, '추가').click();
+    await t.waitForSelector('text=5명');
+    await t.goto(`${base}#teams`);
+    await t.selectOption('select[data-change="pickGrade"]', { label: '6학년' });
+    const before = Number((await text(t)).match(/선수 (\d+)명/)[1]);
+    await btn(t, '학교 명단에서 불러오기').click();
+    await t.waitForSelector('#im-class');
+    assert.ok(await sbtn(t, '0명 팀 명단에 넣기').isDisabled());
+    await t.locator('#sheet .pl').nth(0).click(); await t.locator('#sheet .pl').nth(2).click();
+    await shot(t, '13-import');
+    await sbtn(t, '2명 팀 명단에 넣기').click();
+    await t.waitForFunction((n) => new RegExp(`선수 ${n}명`).test(document.body.innerText), before + 2);
+    assert.match(await text(t), /21\s*노아린[\s\S]*23\s*길서우/);
+    await btn(t, '학교 명단에서 불러오기').click();
+    await sbtn(t, '모두 고르기').click();
+    await sbtn(t, '5명 팀 명단에 넣기').click();
+    await t.waitForFunction((n) => new RegExp(`선수 ${n}명`).test(document.body.innerText), before + 5);
+    assert.doesNotMatch(await text(s), /노아린/, '경기 전에 넣은 선수는 끝난 경기의 학생 화면에 나오지 않아야 함');
+  });
+
   await step('PC 화면: 메뉴는 왼쪽, 내용은 두 칸', async () => {
     await t.setViewportSize({ width: 1280, height: 800 });
     await t.goto(`${base}#home`);
