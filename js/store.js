@@ -1,6 +1,7 @@
 // 저장 부분. 파이어베이스 설정이 있으면 실시간 DB를 쓰고, 없으면 이 기기 안에만 저장하는 미리보기로 돈다.
 // 두 쪽 모두 사용법이 같아서 화면 쪽 코드는 어느 쪽인지 몰라도 된다.
 import { FIREBASE_CONFIG } from './config.js';
+import { pollStore, pulseKeys } from './poll.js';
 
 // apiKey 와 databaseURL 이 모두 있어야 파이어베이스로 연결한다.
 // 로그인 화면에서 "미리보기로 둘러보기"를 누르면 이 기기에서만 미리보기로 연다.
@@ -10,8 +11,15 @@ export const CONFIGURED = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBA
 export const DEMO = !CONFIGURED || localStorage.getItem(FORCE_KEY) === '1';
 const FIREBASE_VERSION = '10.12.2';
 
-export function createStore() {
-  return DEMO ? localStore() : firebaseStore();
+// 학생 화면(mode 'student')은 실시간 연결 없이 몇 초마다 읽기만 한다(poll.js).
+export function createStore(mode) {
+  if (DEMO) return localStore();
+  if (mode === 'student') {
+    const root = String(FIREBASE_CONFIG.databaseURL).replace(/\/+$/, '');
+    const getJson = async (path, query) => { const r = await fetch(`${root}/${path}.json${query ? `?${query}` : ''}`, { cache: 'no-store' }); if (!r.ok) throw new Error(`읽지 못했습니다 (${r.status})`); return r.json(); };
+    return pollStore({ getJson, isHidden: () => document.hidden });
+  }
+  return firebaseStore();
 }
 
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
@@ -94,6 +102,14 @@ async function firebaseStore() {
     });
   });
 
+  // 대회 자료를 고치면 학생 화면이 알아챌 수 있게 바뀐 표시를 남긴다. 실패해도 저장 자체에는 영향이 없다.
+  const pulse = (path, obj) => {
+    const segs = String(path).split('/'); if (segs[0] !== 't' || !segs[1]) return;
+    const marks = pulseKeys(path, obj), up = {};
+    for (const [k, v] of Object.entries(marks)) up[k] = v === null ? null : D.serverTimestamp();
+    if (Object.keys(up).length) D.update(ref(`t/${segs[1]}/pulse`), up).catch(() => {});
+  };
+
   return {
     demo: false,
     get user() { return user; },
@@ -102,10 +118,10 @@ async function firebaseStore() {
     async signOut() { await A.signOut(auth); },
     on(path, cb) { return D.onValue(ref(path), (s) => cb(s.val()), () => cb(null)); },
     async get(path) { return (await D.get(ref(path))).val(); },
-    set: (path, v) => D.set(ref(path), v),
-    update: (path, obj) => D.update(ref(path), obj),
-    remove: (path) => D.remove(ref(path)),
-    async push(path, v) { const r = D.push(ref(path)); await D.set(r, v); return r.key; },
+    async set(path, v) { await D.set(ref(path), v); pulse(path, v); },
+    async update(path, obj) { await D.update(ref(path), obj); pulse(path, obj); },
+    async remove(path) { await D.remove(ref(path)); pulse(path, null); },
+    async push(path, v) { const r = D.push(ref(path)); await D.set(r, v); pulse(path, v); return r.key; },
     // 여러 선생님이 같은 경기를 동시에 고쳐도 서로 덮어쓰지 않게 한다.
     async tx(path, fn) {
       let err = null;
@@ -115,6 +131,7 @@ async function firebaseStore() {
         try { return fn(cur); } catch (e) { err = e; return undefined; }
       });
       if (err) throw err;
+      if (res.committed) pulse(path, true);
       return res.snapshot.val();
     },
     now: () => Date.now() + offset,

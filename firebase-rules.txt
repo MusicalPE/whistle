@@ -46,6 +46,12 @@
           "$game": {
             ".write": "auth != null && root.child('m').child($tid).child(auth.uid).exists()"
           }
+        },
+        "pulse": {
+          "$k": {
+            ".write": true,
+            ".validate": "newData.isNumber() && $k.length < 60"
+          }
         }
       }
     },

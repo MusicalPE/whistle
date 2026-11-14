@@ -1050,7 +1050,7 @@ async function main() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.enter && actions[e.target.dataset.enter]) { e.preventDefault(); actions[e.target.dataset.enter]({}); } });
   document.addEventListener('focusout', () => setTimeout(() => { if (S.dirty) render(); }, 200));
   window.addEventListener('hashchange', () => { S.sheet = null; window.scrollTo(0, 0); render(true); });
-  try { S.store = await createStore(); } catch (e) { document.getElementById('app').innerHTML = '<div class="app"><p class="note pad mt">연결하지 못했습니다. 인터넷을 확인하고 다시 열어 주세요.</p></div>'; return; }
+  try { S.store = await createStore(MODE); } catch (e) { document.getElementById('app').innerHTML = '<div class="app"><p class="note pad mt">연결하지 못했습니다. 인터넷을 확인하고 다시 열어 주세요.</p></div>'; return; }
   setInterval(tick, 250);
   if (MODE === 'teacher') { S.store.onAuth(afterAuth); await afterAuth(); } else { openT(params.get('v') || params.get('b') || params.get('o')); render(true); }
 }

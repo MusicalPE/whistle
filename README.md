@@ -32,7 +32,7 @@
 
 ```
 node tests/check.mjs          # 코드 검사: 문법, 단추가 부르는 기능, 판 번호
-node --test tests/logic.test.mjs   # 경기 규칙 시험
+node --test tests/logic.test.mjs tests/poll.test.mjs   # 경기 규칙·학생 화면 읽기 시험
 node tests/e2e.mjs            # 전체 시험: 화면을 띄워 선생님·학생·전광판 흐름을 밟아 봄 (playwright 필요)
 ```
 
