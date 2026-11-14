@@ -124,6 +124,8 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .nav { margin-top: auto; position: sticky; bottom: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: #fff; border-top: 1px solid var(--line); }
 .nav a { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: var(--sub); text-decoration: none; }
 .nav a.on { font-weight: 700; color: var(--ink); box-shadow: inset 0 3px 0 var(--ink); }
+.navbrand { display: none; }
+.colgap { margin-top: 10px; }
 .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--ink); border-radius: 10px; overflow: hidden; }
 .tabs button { height: 44px; border: 0; background: #fff; color: var(--sub); font-size: 14px; font-weight: 500; }
 .tabs button.on { background: var(--ink); color: #fff; font-weight: 700; }
@@ -162,3 +164,22 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .board th, .board td { padding: 1.1vh 1vw; border-bottom: 1px solid #39424F; text-align: center; }
 .board th { color: var(--dim); font-size: .7em; } .board td.l, .board th.l { text-align: left; }
 @media (max-width: 700px) { .board .low { grid-template-columns: 1fr; } }
+
+/* PC 화면: 메뉴는 왼쪽, 내용은 두 칸 */
+@media (min-width: 900px) {
+  .app { max-width: 560px; }
+  .app:has(> .nav) { max-width: 1180px; padding-left: 216px; }
+  .nav { position: fixed; top: 0; bottom: 0; left: max(0px, calc(50vw - 590px)); width: 216px; margin-top: 0; display: flex; flex-direction: column; border-top: 0; border-right: 1px solid var(--line); }
+  .navbrand { display: block; padding: 26px 24px 22px; }
+  .nav a { height: 52px; justify-content: flex-start; padding-left: 28px; font-size: 16px; }
+  .nav a.on { box-shadow: inset 4px 0 0 var(--ink); background: var(--bg); }
+  .app:has(> .nav) .top > .brand { display: none; }
+  .app:has(> .nav) .top { padding-top: 28px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .colgap { margin-top: 0; }
+  .app.narrow > *:not(.nav):not(.demo) { max-width: 680px; }
+  .chips { flex-wrap: wrap; overflow: visible; }
+  #sheet { justify-content: center; }
+  .sheet { border-radius: 18px; }
+  #toast { bottom: 32px; }
+}

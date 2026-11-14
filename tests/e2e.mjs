@@ -260,6 +260,26 @@ try {
     await t.waitForSelector('text=학생용 화면 QR');
   });
 
+  await step('PC 화면: 메뉴는 왼쪽, 내용은 두 칸', async () => {
+    await t.setViewportSize({ width: 1280, height: 800 });
+    await t.goto(`${base}#home`);
+    await t.waitForSelector('text=학생용 화면 QR');
+    const nav = await t.locator('.nav').boundingBox();
+    assert.ok(nav.x < 100 && nav.height > 600 && nav.width < 260, '메뉴가 왼쪽 세로로 있어야 함');
+    const cols = await t.locator('.cols > .col').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+    assert.ok(cols[1] - cols[0] > 300, '두 칸이 나란히 있어야 함');
+    await shot(t, '20-pc-home');
+    await t.locator('a.game').first().click();
+    await t.waitForSelector('.score');
+    await shot(t, '21-pc-game');
+    await t.goto(`${base}#records`); await shot(t, '22-pc-records');
+    await t.goto(`${base}#teams`); await shot(t, '23-pc-teams');
+    await t.setViewportSize({ width: 390, height: 844 });
+    await t.goto(`${base}#home`);
+    const m = await t.locator('.nav').boundingBox();
+    assert.ok(m.width > 380 && m.height < 70, '폰에서는 메뉴가 아래 가로로 있어야 함');
+  });
+
   assert.deepEqual(errors, [], '화면 오류가 없어야 함');
   console.log(`전체 시험 통과: ${steps.length}단계\n- ${steps.join('\n- ')}`);
 } catch (e) {
