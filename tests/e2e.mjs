@@ -217,6 +217,26 @@ try {
     await addGameAndOpen();
     await btn(t, '경기 시작').click();
     const out = (team) => t.locator(`[data-act="dOut"][data-team="${team}"][data-d="-1"]`).click();
+    // 아웃 기록(선수까지): 누가 아웃됐고 누가 아웃시켰는지 고르기, 되살아남
+    await out('b');
+    await t.waitForSelector('text=누가 아웃됐나요?');
+    await t.locator('#sheet .pl').first().click();
+    await t.waitForSelector('text=누가 아웃시켰나요?');
+    await shot(t, '09a-dodge-out');
+    await t.locator('#sheet .pl').nth(1).click();
+    await t.waitForFunction(() => document.querySelector('[data-score="b"]').textContent === '2');
+    assert.match(await text(t), /5-2 가람 1 라 아웃 · 5-1 한빛 2 나가 아웃시킴/);
+    await t.locator('[data-act="dOut"][data-team="b"][data-d="1"]').click();
+    await t.waitForSelector('text=누가 되살아났나요?');
+    await t.locator('#sheet .pl').first().click();
+    await t.waitForFunction(() => document.querySelector('[data-score="b"]').textContent === '3');
+    const dodgeHash = await t.evaluate(() => location.hash);
+    await t.goto(`${base}#records`);
+    await t.waitForSelector('.tbl button.tr');
+    assert.match(await text(t), /2 나\s*5-1 한빛\s*1\s*1\s*0/);
+    await t.goto(`${base}#rules`);
+    await btn(t, '인원만').click();
+    await t.goto(`${base}${dodgeHash}`);
     await out('b'); await out('b');
     await t.waitForFunction(() => document.querySelector('[data-score="b"]').textContent === '1');
     await out('b');

@@ -396,3 +396,25 @@ test('1·2·3점 단추는 농구와 직접 입력 종목에서만', () => {
   assert.deepEqual(L.stepsOf({ ...L.gradeFromSport('basket', 'x'), steps: '1' }), [1]);
   assert.equal(L.canStep(L.gradeFromSport('teeball', 'x')), false);
 });
+
+test('피구 아웃 기록: 누가 아웃됐고 누가 아웃시켰는지, 되살아남, 세트가 바뀌면 초기화', () => {
+  const grade = { ...L.gradeFromSport('dodge', '5학년'), starters: 3 };
+  assert.equal(grade.outDetail, true);
+  const teams = { ta: { name: '가팀', players: roster(3, 3) }, tb: { name: '나팀', players: roster(3, 3) } };
+  const g = { id: 'x', ...L.newGame('g5', 1, 'ta', 'tb') };
+  const c = (now) => ctxAt(now, { rosters: { a: teams.ta.players, b: teams.tb.players } });
+  const logs = { x: {} }; let n = 0; const keep = (list) => { list.forEach((l) => { logs.x[`l${n++}`] = l; }); return list; };
+  keep(L.start(g, grade, c(0)));
+  const out = keep(L.dodgeOut(g, grade, c(1), 'b', -1, 'p2', 'p1'));
+  assert.match(out[0].text, /나팀 2 선수2 아웃 · 가팀 1 선수1가 아웃시킴/);
+  assert.deepEqual([g.remain.b, g.dout.b.p2], [2, true]);
+  keep(L.dodgeOut(g, grade, c(2), 'b', 1, 'p2'));
+  assert.deepEqual([g.remain.b, g.dout.b.p2], [3, undefined]);
+  keep(L.dodgeOut(g, grade, c(3), 'b', -1, 'p1', 'p1'));
+  keep(L.dodgeOut(g, grade, c(4), 'b', -1, 'p2', ''));
+  keep(L.dodgeOut(g, grade, c(5), 'b', -1));
+  assert.deepEqual([g.cur, g.sa, g.dout], [1, 1, { a: {}, b: {} }]);
+  const rec = Object.fromEntries(L.records(teams, [g], logs).map((r) => [r.key, r]));
+  assert.equal(rec['ta/p1'].ko, 2);
+  assert.equal(rec['tb/p2'].ko, 0);
+});

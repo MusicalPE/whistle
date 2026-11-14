@@ -10,7 +10,7 @@ export const SPORTS = {
   volley: { name: '배구', format: 'sets', formats: ['sets'], sets: 3, setPoints: 25, starters: 6, cards: 6, steps: '1' },
   teeball: { name: '티볼', format: 'innings', formats: ['innings'], innings: 3, starters: 10, cards: 3, steps: '1', detail: true, rotate: 'all' },
   baseball: { name: '야구', format: 'innings', formats: ['innings'], innings: 5, starters: 9, cards: 3, steps: '1', detail: true, rotate: 'out3' },
-  dodge: { name: '피구', format: 'dodge', formats: ['dodge'], sets: 3, minutes: 5, starters: 10, cards: 0, steps: '1' },
+  dodge: { name: '피구', format: 'dodge', formats: ['dodge'], sets: 3, minutes: 5, starters: 10, cards: 0, steps: '1', outDetail: true },
   custom: { name: '직접 입력', format: 'halves', formats: ALL_FORMATS, minutes: 10, starters: 5, cards: 3, steps: '1' },
 };
 
@@ -29,6 +29,8 @@ export function gradeFromSport(sport, label) {
     starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
     // assist: 득점할 때 어시스트한 선수도 고른다(시간제 종목).
     assist: !!p.assist,
+    // outDetail: 피구에서 누가 아웃됐고 누가 아웃시켰는지까지 고른다. 끄면 인원만 센다.
+    outDetail: !!p.outDetail,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
     // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
@@ -75,6 +77,7 @@ export function norm(g, grade) {
   g.st = { a: {}, b: {}, ...(g.st || {}) };
   g.remain = { a: 0, b: 0, ...(g.remain || {}) };
   g.r0 = { a: 0, b: 0, ...(g.r0 || {}) };
+  g.dout = { a: {}, b: {}, ...(g.dout || {}) };
   g.cur = g.cur || 0; g.half = g.half || 0; g.sa = g.sa || 0; g.sb = g.sb || 0;
   if (grade.format === 'innings') {
     g.bases = { b1: '', b2: '', b3: '', ...(g.bases || {}) };
@@ -257,7 +260,7 @@ function endDodgeSet(g, grade, ctx, winner, reason) {
   const n = partCount(grade);
   const text = winner === 'd' ? `${g.cur + 1}세트 무승부 (${reason})` : `${g.cur + 1}세트 ${ctx.names[winner]} 승 (${reason})`;
   const logs = [mk(g, grade, ctx, 'info', text)];
-  g.wins[g.cur] = winner; g.why[g.cur] = reason; g.tie = false; g.ext = false;
+  g.wins[g.cur] = winner; g.why[g.cur] = reason; g.tie = false; g.ext = false; g.dout = { a: {}, b: {} };
   recount(g, grade);
   const need = Math.floor(n / 2) + 1;
   if (g.sa >= need || g.sb >= need || g.cur >= n - 1) return finish(g, grade, ctx, logs);
@@ -267,17 +270,28 @@ function endDodgeSet(g, grade, ctx, winner, reason) {
 }
 
 // 피구 아웃(-1)과 되살아남(+1). 0명이 되면 세트가 바로 끝난다. 연장 중에는 첫 아웃으로 끝난다.
-export function dodgeOut(g, grade, ctx, team, delta) {
+// pid 는 아웃된(또는 되살아난) 선수, kpid 는 아웃시킨 상대 선수. 둘 다 없어도 된다(인원만 세기).
+export function dodgeOut(g, grade, ctx, team, delta, pid, kpid) {
   norm(g, grade); live(g);
   if (g.tie) throw new Error('동점입니다. 무승부나 연장을 먼저 골라 주세요.');
   const other = team === 'a' ? 'b' : 'a';
+  const logs = [];
+  if (delta < 0 && g.remain[team] <= 0) return logs;
   g.remain[team] = Math.max(0, g.remain[team] + delta);
-  if (delta < 0 && g.ext) return endDodgeSet(g, grade, ctx, other, '연장');
+  if (pid && delta < 0) {
+    g.dout[team][pid] = true;
+    const by = kpid ? playerLabel(ctx, other, kpid) : '';
+    logs.push(mk(g, grade, ctx, 'out', `${ctx.names[team]} ${playerLabel(ctx, team, pid)} 아웃${by ? ` · ${ctx.names[other]} ${by}가 아웃시킴` : ''}`, { team, pid, kpid: by ? kpid : '' }));
+  } else if (pid && delta > 0) {
+    delete g.dout[team][pid];
+    logs.push(mk(g, grade, ctx, 'info', `${ctx.names[team]} ${playerLabel(ctx, team, pid)} 되살아남`, { team, pid }));
+  }
+  if (delta < 0 && g.ext) return logs.concat(endDodgeSet(g, grade, ctx, other, '연장'));
   if (g.remain[team] === 0) {
     const left = clockLeft(g, ctx.now);
-    return endDodgeSet(g, grade, ctx, other, left > 0 ? `전원 아웃 · ${fmtClock(left)} 남음` : '전원 아웃');
+    return logs.concat(endDodgeSet(g, grade, ctx, other, left > 0 ? `전원 아웃 · ${fmtClock(left)} 남음` : '전원 아웃'));
   }
-  return [];
+  return logs;
 }
 
 // 시간이 끝났는데 남은 인원이 같을 때: 무승부(draw) 또는 연장(ext)
@@ -425,7 +439,7 @@ export function records(teams, games, logs) {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -445,12 +459,15 @@ export function records(teams, games, logs) {
         const goals = sum(mine.filter((l) => l.type === 'goal' && l.pid === pid).map((l) => l.pts || 1)) + runs;
         r.games++; if (st[pid]) r.starts++; else r.subIn++;
         const assists = mine.filter((l) => l.type === 'goal' && l.apid === pid).length;
+        const kills = glogs.filter((l) => l.type === 'out' && l.team !== side && l.kpid === pid).length;
+        r.ko += kills;
         r.goals += goals; r.as += assists; r.ab += pas.length; r.h += hits.length; r.rbi += rbi;
         for (const l of hits) r[l.res] += 1;
         const bits = [st[pid] ? '선발' : '교체 투입'];
         if (pas.length) bits.push(`${pas.length}타석 ${hits.length}안타${rbi ? ` ${rbi}타점` : ''}`);
         if (goals) bits.push(`${goals}${pas.length || runs ? '득점' : '점'}`);
         if (assists) bits.push(`어시스트 ${assists}`);
+        if (kills) bits.push(`아웃시킴 ${kills}`);
         r.detail.push(`${g.no}경기 ${other}전 · ${bits.join(', ')}`);
       }
     }
