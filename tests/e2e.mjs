@@ -394,6 +394,32 @@ try {
     await btn(t, '경기 시작').click();
     await t.waitForSelector('text=지금 타자 · 1번');
     assert.equal(await t.locator('[data-batter]').innerText(), '3 다온');
+    // 3아웃제로 바꿔 주자를 둘 세운 뒤 병살: 함께 아웃되는 주자를 고르는 창
+    const gameHash = await t.evaluate(() => location.hash);
+    await t.goto(`${base}#rules`);
+    await btn(t, '3아웃제').click();
+    await btn(t, '다음 공격에 유지').click();
+    await t.goto(`${base}${gameHash}`);
+    await btn(t, '1루타').click();
+    await t.waitForFunction(() => document.querySelector('[data-batter]').textContent === '1 가람');
+    await btn(t, '1루타').click();
+    await t.waitForFunction(() => document.querySelector('[data-batter]').textContent === '2 나래');
+    await btn(t, '병살').click();
+    await t.waitForSelector('text=타자와 함께 아웃되는 주자는?');
+    await shot(t, '17-dp');
+    await t.locator('#sheet').getByRole('button', { name: /2루/ }).click();
+    await t.waitForFunction(() => /아웃 2 \/ 3/.test(document.querySelector('#app').innerText));
+    assert.match(await text(t), /병살 \(2루 주자 3 다온 함께 아웃\)/);
+    assert.match(await text(t), /1루\s*1 가람/);
+    // 학생 화면과 전광판은 타순으로 보여 주고 지금 타자를 강조
+    await s.reload();
+    await s.selectOption('select[data-change="pickGrade"]', { label: '티볼반' });
+    await s.waitForSelector('.nowbat');
+    assert.match(await s.locator('.lineup.a').last().innerText(), /타순\s*1번 다온 · 타석\s*2번 가람\s*3번 나래/);
+    await b.reload();
+    await b.waitForSelector('.board .nowbat');
+    assert.match(await b.locator('.box.a').innerText(), /타순[\s\S]*1번 다온 · 2번 가람 · 3번 나래/);
+    await shot(b, '18-board-order');
     await o.reload();
     await o.waitForSelector('text=이미 시작한 경기라 타순을 바꿀 수 없습니다');
     await o.close();

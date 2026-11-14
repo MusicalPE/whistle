@@ -8,7 +8,8 @@ export const SPORTS = {
   netball: { name: '넷볼', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 7, cards: 3, steps: '1' },
   basket: { name: '농구', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 5, cards: 5, steps: '123' },
   volley: { name: '배구', format: 'sets', formats: ['sets'], sets: 3, setPoints: 25, starters: 6, cards: 6, steps: '1' },
-  teeball: { name: '티볼', format: 'innings', formats: ['innings'], innings: 3, starters: 10, cards: 3, steps: '1' },
+  teeball: { name: '티볼', format: 'innings', formats: ['innings'], innings: 3, starters: 10, cards: 3, steps: '1', detail: true, rotate: 'all' },
+  baseball: { name: '야구', format: 'innings', formats: ['innings'], innings: 5, starters: 9, cards: 3, steps: '1', detail: true, rotate: 'out3' },
   dodge: { name: '피구', format: 'dodge', formats: ['dodge'], sets: 3, minutes: 5, starters: 10, cards: 0, steps: '1' },
   custom: { name: '직접 입력', format: 'halves', formats: ALL_FORMATS, minutes: 10, starters: 5, cards: 3, steps: '1' },
 };
@@ -28,7 +29,8 @@ export function gradeFromSport(sport, label) {
     starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
-    detail: false, rotate: 'all', maxAdv: 3,
+    // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
+    detail: !!p.detail, rotate: p.rotate || 'all', maxAdv: 3, keepRunners: false,
   };
 }
 
@@ -73,6 +75,7 @@ export function norm(g, grade) {
     g.bases = { b1: '', b2: '', b3: '', ...(g.bases || {}) };
     g.outs = g.outs || 0; g.hb = g.hb || 0;
     g.bat = { a: 0, b: 0, ...(g.bat || {}) };
+    g.left = { a: {}, b: {}, ...(g.left || {}) };
     const list = (v) => (Array.isArray(v) ? v : Object.values(v || {}));
     g.order = { a: list((g.order || {}).a), b: list((g.order || {}).b) };
   }
@@ -217,10 +220,11 @@ export function nextPart(g, grade, ctx) {
   }
   if (grade.format === 'innings') {
     const logs = [mk(g, grade, ctx, 'info', `${partName(grade, g.cur, g.half)} 끝 · 공수 교대`)];
-    g.bases = { b1: '', b2: '', b3: '' }; g.outs = 0; g.hb = 0; g.halfDone = false; g.lb = ''; delete g.undo;
-    if (!g.half) { g.half = 1; return logs; }
-    if (g.cur >= n - 1) return finish(g, grade, ctx, logs);
-    g.cur += 1; g.half = 0;
+    g.left[attacker(g)] = { ...g.bases };
+    g.outs = 0; g.hb = 0; g.halfDone = false; g.lb = ''; delete g.undo;
+    if (g.half && g.cur >= n - 1) { g.bases = { b1: '', b2: '', b3: '' }; return finish(g, grade, ctx, logs); }
+    if (g.half) { g.cur += 1; g.half = 0; } else g.half = 1;
+    g.bases = { b1: '', b2: '', b3: '', ...(grade.keepRunners && g.detail ? g.left[attacker(g)] : {}) };
     return logs;
   }
   if (grade.format === 'sets') {
@@ -294,7 +298,10 @@ export function sub(g, grade, ctx, team, outPid, inPid) {
   g.used[team] += 1;
   if (grade.format === 'innings') {
     g.order[team] = g.order[team].map((pid) => (pid === outPid ? inPid : pid));
-    for (const k of ['b1', 'b2', 'b3']) if (g.bases[k] === outPid) g.bases[k] = inPid;
+    for (const k of ['b1', 'b2', 'b3']) {
+      if (g.bases[k] === outPid) g.bases[k] = inPid;
+      if ((g.left[team] || {})[k] === outPid) g.left[team][k] = inPid;
+    }
   }
   const text = `${ctx.names[team]} 교체 · ${playerLabel(ctx, team, outPid)} 나감 → ${playerLabel(ctx, team, inPid)} 들어감`;
   return [mk(g, grade, ctx, 'sub', text, { team, pout: outPid, pin: inPid })];
@@ -316,14 +323,18 @@ function checkHalf(g, grade) {
 }
 
 // 타석 결과. 안타는 타자가 간 만큼 주자도 같이 가고, 홈에 들어오면 점수·득점·타점이 올라간다.
-export function bat(g, grade, ctx, res) {
+export function bat(g, grade, ctx, res, dpBase) {
   norm(g, grade); live(g); detailOnly(g, grade);
   if (g.halfDone) throw new Error('이번 공격이 끝났습니다. "공수 교대"를 눌러 주세요.');
   if (!(res in RESULT_NAMES)) throw new Error('알 수 없는 타석 결과입니다.');
   if (res in HIT && res !== 'hr' && HIT[res] > maxAdv(grade)) throw new Error(`이 학년은 홈런이 아니면 ${maxAdv(grade)}루까지만 갈 수 있습니다.`);
   const side = attacker(g), pid = batterOf(g), arr = side === 'a' ? g.pa : g.pb;
-  const firstRunner = [1, 2, 3].find((b) => g.bases[`b${b}`]);
-  if (res === 'dp' && !firstRunner) throw new Error('주자가 없으면 병살이 될 수 없습니다.');
+  // 병살: 주자가 한 명이면 그 주자, 여럿이면 고른 루(dpBase)의 주자가 타자와 함께 아웃된다.
+  const onBase = [1, 2, 3].filter((b) => g.bases[`b${b}`]);
+  const firstRunner = onBase.includes(Number(dpBase)) ? Number(dpBase) : onBase.length === 1 ? onBase[0] : 0;
+  if (res === 'dp' && !onBase.length) throw new Error('주자가 없으면 병살이 될 수 없습니다.');
+  if (res === 'dp' && !firstRunner) throw new Error('함께 아웃되는 주자를 골라 주세요.');
+  const dpWho = res === 'dp' ? playerLabel(ctx, attacker(g), g.bases[`b${firstRunner}`]) : '';
   const entry = mk(g, grade, ctx, 'pa', '', { team: side, pid, res, op: ctx.op || '' });
   keepUndo(g, ctx);
   const scored = [];
@@ -341,7 +352,7 @@ export function bat(g, grade, ctx, res) {
   g.bat[side] = (g.bat[side] + 1) % g.order[side].length; g.hb += 1; g.lb = pid;
   checkHalf(g, grade);
   entry.rbi = res === 'e' ? 0 : scored.length; entry.scored = scored;
-  entry.text = `${ctx.names[side]} ${playerLabel(ctx, side, pid)} · ${RESULT_NAMES[res]}${scored.length ? ` · ${scored.length}득점 (${scored.map((r) => playerLabel(ctx, side, r)).join(', ')})` : ''}`;
+  entry.text = `${ctx.names[side]} ${playerLabel(ctx, side, pid)} · ${RESULT_NAMES[res]}${res === 'dp' ? ` (${firstRunner}루 주자 ${dpWho} 함께 아웃)` : ''}${scored.length ? ` · ${scored.length}득점 (${scored.map((r) => playerLabel(ctx, side, r)).join(', ')})` : ''}`;
   return [entry];
 }
 

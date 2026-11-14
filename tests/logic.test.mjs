@@ -336,3 +336,36 @@ test('티볼: 최대 진루 수를 2로 두면 3루타는 못 누르고 홈런�
   assert.equal(g.sa, 2);
   assert.equal(L.maxAdv({}), 3);
 });
+
+test('병살: 주자가 여럿이면 함께 아웃되는 주자를 골라야 한다', () => {
+  const { grade, g, c } = teeGame({ rotate: 'out3' }, 6);
+  L.bat(g, grade, c(1, 'o1'), 'h1'); L.bat(g, grade, c(2, 'o2'), 'h1');
+  assert.deepEqual(g.bases, { b1: 'p2', b2: 'p1', b3: '' });
+  assert.throws(() => L.bat(g, grade, c(3), 'dp'), /주자를 골라/);
+  const logs = L.bat(g, grade, c(3, 'o3'), 'dp', 2);
+  assert.deepEqual([g.bases, g.outs], [{ b1: 'p2', b2: '', b3: '' }, 2]);
+  assert.match(logs[0].text, /병살 \(2루 주자 1 선수1 함께 아웃\)/);
+});
+
+test('잔루 유지 설정: 켜면 다음 공격 때 남은 주자가 그대로, 끄면 비워짐', () => {
+  for (const keep of [true, false]) {
+    const { grade, g, c } = teeGame({ keepRunners: keep });
+    L.bat(g, grade, c(1, 'o1'), 'h2'); L.bat(g, grade, c(2, 'o2'), 'go'); L.bat(g, grade, c(3, 'o3'), 'h1');
+    assert.deepEqual(g.bases, { b1: 'p3', b2: '', b3: 'p1' });
+    L.nextPart(g, grade, c(4));
+    assert.deepEqual(g.bases, { b1: '', b2: '', b3: '' }, '상대 공격은 빈 루에서 시작');
+    L.bat(g, grade, c(5, 'o5'), 'h1');
+    L.nextPart(g, grade, c(6));
+    assert.deepEqual([g.cur, g.half], [1, 0]);
+    assert.deepEqual(g.bases, keep ? { b1: 'p3', b2: '', b3: 'p1' } : { b1: '', b2: '', b3: '' });
+    L.nextPart(g, grade, c(7));
+    assert.deepEqual(g.bases, keep ? { b1: 'p1', b2: '', b3: '' } : { b1: '', b2: '', b3: '' });
+  }
+});
+
+test('야구는 티볼과 같은 방식에 3아웃제가 기본', () => {
+  const b = L.gradeFromSport('baseball', '중1'), tb = L.gradeFromSport('teeball', '6학년');
+  assert.deepEqual([b.format, b.rotate, b.detail, L.sportName(b)], ['innings', 'out3', true, '야구']);
+  assert.deepEqual([tb.format, tb.rotate, tb.detail], ['innings', 'all', true]);
+  assert.equal(L.gradeFromSport('futsal', 'x').detail, false);
+});

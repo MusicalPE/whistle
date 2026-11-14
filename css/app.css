@@ -136,6 +136,8 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .qr { background: #fff; border-radius: 6px; padding: 4px; line-height: 0; }
 .qr svg { width: 100%; height: 100%; display: block; }
 .lineup { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; border-top-width: 4px; font-size: 14px; }
+.nowbat { background: var(--accent); color: var(--ink); font-weight: 700; border-radius: 6px; padding: 1px 6px; }
+.lineup .nowbat { margin: 0 -6px; }
 .lineup.a { border-top-color: var(--blue); } .lineup.b { border-top-color: var(--orange); }
 
 #sheet:empty { display: none; }
