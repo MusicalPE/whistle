@@ -206,3 +206,27 @@ test('빈 칸이 지워진 경기도 다시 채워서 읽는다', () => {
   const g = L.norm({ status: 'live', cur: 1, wins: { 0: 'a' } }, grade);
   assert.deepEqual([g.pa, g.wins, g.used, g.half], [[0, 0, 0], ['a'], { a: 0, b: 0 }, 0]);
 });
+
+test('이닝제: 수비 팀은 점수를 올릴 수 없고, 정정(-1)은 된다', () => {
+  const grade = L.gradeFromSport('teeball', '4학년');
+  const g = L.newGame('g4', 1, 'ta', 'tb');
+  L.start(g, grade, ctxAt(0));
+  assert.equal(L.attacker(g), 'a');
+  assert.throws(() => L.score(g, grade, ctxAt(1), 'b', 1, ''), /수비 팀/);
+  L.score(g, grade, ctxAt(1), 'a', 1, '');
+  L.nextPart(g, grade, ctxAt(2));
+  assert.equal(L.attacker(g), 'b');
+  assert.throws(() => L.score(g, grade, ctxAt(3), 'a', 1, ''), /수비 팀/);
+  L.score(g, grade, ctxAt(3), 'a', -1);
+  L.score(g, grade, ctxAt(3), 'b', 1, '');
+  assert.deepEqual([g.sa, g.sb], [0, 1]);
+});
+
+test('경기 일정 글씨: 날짜·교시·시간은 모두 선택', () => {
+  assert.equal(L.whenText({}), '');
+  assert.equal(L.whenText({ date: '2026-11-20', period: '3교시' }), '11월 20일(금) 3교시');
+  assert.equal(L.whenText({ date: '2026-11-20', time: '09:30', period: '3교시' }), '11월 20일(금) 09시 30분');
+  assert.equal(L.whenText({ time: '14:00' }), '14시');
+  assert.equal(L.whenText({ period: '점심시간' }), '점심시간');
+  assert.equal(L.whenText({ date: '2026-03-02' }), '3월 2일(월)');
+});

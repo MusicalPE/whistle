@@ -144,8 +144,25 @@ export function timeUp(g, grade, ctx) {
   return endDodgeSet(g, grade, ctx, g.remain.a > g.remain.b ? 'a' : 'b', '시간 종료');
 }
 
+// 이닝제에서 지금 공격하는 팀. 초에는 먼저 적은 팀(a), 말에는 나중 팀(b).
+export const attacker = (g) => (g.half ? 'b' : 'a');
+
+// 경기 일정 글씨. 날짜와 교시(또는 시간)는 모두 선택이다. 예: "11월 20일(금) 3교시", "11월 20일(금) 09시 30분"
+export function whenText(g) {
+  const out = [];
+  if (g.date) {
+    const [y, m, d] = String(g.date).split('-').map(Number);
+    const day = new Date(y, m - 1, d);
+    if (!Number.isNaN(day.getTime())) out.push(`${m}월 ${d}일(${'일월화수목금토'[day.getDay()]})`);
+  }
+  if (g.time) { const [h, min] = String(g.time).split(':'); out.push(min === '00' ? `${h}시` : `${h}시 ${min}분`); }
+  else if (g.period) out.push(String(g.period));
+  return out.join(' ');
+}
+
 export function score(g, grade, ctx, team, pts, pid) {
   norm(g, grade); live(g);
+  if (grade.format === 'innings' && pts > 0 && team !== attacker(g)) throw new Error('지금은 수비 팀이라 점수를 올릴 수 없습니다.');
   const arr = team === 'a' ? g.pa : g.pb;
   arr[g.cur] = Math.max(0, arr[g.cur] + pts);
   recount(g, grade);

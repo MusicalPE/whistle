@@ -238,10 +238,20 @@ try {
       await addGameAndOpen();
       await btn(t, '경기 시작').click();
       await t.waitForFunction((c) => document.body.innerText.includes(c), check);
+      if (sport === 'teeball') {
+        assert.ok(await t.locator('[data-act="gPlus"][data-team="b"]').isDisabled(), '초에는 나중 팀이 수비라 득점 단추가 꺼져 있어야 함');
+        assert.match(await text(t), /공격[\s\S]*수비/);
+      }
       await t.locator('[data-act="gPlus"][data-team="a"]').first().click();
       await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent !== '0');
       await t.locator('[data-act="gNext"]').click();
       await t.waitForFunction(() => document.querySelectorAll('.log').length >= 2);
+      if (sport === 'teeball') {
+        await t.waitForSelector('text=1회 말');
+        assert.ok(await t.locator('[data-act="gPlus"][data-team="a"]').isDisabled(), '말에는 먼저 팀이 수비');
+        await t.locator('[data-act="gPlus"][data-team="b"]').click();
+        await t.waitForFunction(() => document.querySelector('[data-score="b"]').textContent === '1');
+      }
       await shot(t, `11-${sport}`);
     });
   }
@@ -293,6 +303,35 @@ try {
     assert.doesNotMatch(await text(s), /노아린/, '경기 전에 넣은 선수는 끝난 경기의 학생 화면에 나오지 않아야 함');
   });
 
+  await step('경기 일정: 날짜와 교시 넣기, 시간으로 바꾸기, 학생 화면에 보임', async () => {
+    await t.goto(`${base}#home`);
+    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.getByRole('button', { name: '+ 경기 추가' }).click();
+    await t.fill('#w-date', '2026-11-20'); await t.selectOption('#w-period', '3교시');
+    await sbtn(t, '추가').click();
+    await t.waitForSelector('text=예정 · 11월 20일(금) 3교시');
+    await s.reload(); await s.getByRole('button', { name: '경기 결과' }).click();
+    assert.match(await text(s), /예정 · 11월 20일\(금\) 3교시/);
+    await t.locator('a.game').last().click();
+    await btn(t, '일정 바꾸기').click();
+    await t.fill('#w-time', '09:30'); await sbtn(t, '저장').click();
+    await t.waitForSelector('text=11월 20일(금) 09시 30분');
+    await s.waitForFunction(() => /11월 20일\(금\) 09시 30분/.test(document.body.innerText));
+  });
+
+  await step('끝난 경기 지우기: 순위표와 기록에서도 빠짐', async () => {
+    await t.goto(`${base}#home`);
+    await t.locator('a.game').first().click();
+    await t.waitForSelector('text=최종 점수');
+    await btn(t, '이 경기 지우기').click();
+    await t.waitForSelector('text=순위표와 개인 기록에서도 빠집니다');
+    await sbtn(t, '지우기').click();
+    await t.waitForSelector('text=학생용 화면 QR');
+    assert.equal(await t.locator('a.game').count(), 1);
+    await s.waitForFunction(() => !/순위표[\s\S]*6-1 번개\s*1\s*1/.test(document.body.innerText));
+    assert.match(await text(s), /6-1 번개\s*0\s*0\s*0\s*0\s*0/);
+  });
+
   await step('PC 화면: 메뉴는 왼쪽, 내용은 두 칸', async () => {
     await t.setViewportSize({ width: 1280, height: 800 });
     await t.goto(`${base}#home`);
@@ -303,7 +342,7 @@ try {
     assert.ok(cols[1] - cols[0] > 300, '두 칸이 나란히 있어야 함');
     await shot(t, '20-pc-home');
     await t.locator('a.game').first().click();
-    await t.waitForSelector('.score');
+    await t.waitForSelector('.cols .dark');
     await shot(t, '21-pc-game');
     await t.goto(`${base}#records`); await shot(t, '22-pc-records');
     await t.goto(`${base}#teams`); await shot(t, '23-pc-teams');
