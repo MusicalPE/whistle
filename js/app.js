@@ -270,7 +270,7 @@ function gameScreen(id) {
     if (!liveNow) return '';
     if (gr.format === 'dodge') return `<div class="btns"><button class="btn s${side} grow" data-act="dOut" data-id="${id}" data-team="${side}" data-d="-1">아웃 −1</button><button class="btn minus" data-act="dOut" data-id="${id}" data-team="${side}" data-d="1" aria-label="${esc(teamName(g[side]))} 한 명 되살아남">+1</button></div>`;
     if (L.isDetail(g, gr)) return '';
-    const steps = gr.steps === '123' && L.isTimed(gr) ? [1, 2, 3] : [1];
+    const steps = L.stepsOf(gr);
     const defend = gr.format === 'innings' && L.attacker(g) !== side;
     return `<div class="btns"><button class="btn minus" data-act="gMinus" data-id="${id}" data-team="${side}" aria-label="${esc(teamName(g[side]))} 점수 1점 빼기">−</button>${steps.map((p) => `<button class="btn s${side} grow" style="padding:0" data-act="gPlus" data-id="${id}" data-team="${side}" data-pts="${p}"${defend ? ' disabled' : ''}>${defend ? '수비 중' : `+${p}${steps.length === 1 ? ' 득점' : ''}`}</button>`).join('')}</div>`;
   };
@@ -359,8 +359,8 @@ ${gr.detail ? `<div class="set"><span>공수 교대</span>${seg('rotate', gr.rot
 <div class="set"><span>선발 인원</span>${stepper('starters', gr.starters, '명', 1, 30, '선발 인원')}</div>
 <div class="set"><span>교체 카드 <span class="muted">(팀마다 · 0은 제한 없음)</span></span>${stepper('cards', gr.cards, '장', 0, 20, '교체 카드')}</div>
 <div class="set"><span>나간 선수 다시 들어가기</span>${seg('reentry', gr.reentry ? 1 : 0, [[1, '허용'], [0, '금지']])}</div>
-${L.isTimed(gr) ? `<div class="set"><span>득점 단추</span>${seg('steps', gr.steps, [['1', '1점씩'], ['123', '1·2·3점']])}</div>
-<div class="set"><span>어시스트 기록</span>${seg('assist', gr.assist ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>` : ''}</section>
+${L.canStep(gr) ? `<div class="set"><span>득점 단추</span>${seg('steps', gr.steps, [['1', '1점씩'], ['123', '1·2·3점']])}</div>` : ''}
+${L.isTimed(gr) ? `<div class="set"><span>어시스트 기록</span>${seg('assist', gr.assist ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>` : ''}</section>
 ${f === 'innings' && gr.detail ? '<p class="note pad" style="padding-top:6px">타석 기록은 타석마다 결과(1루타, 땅볼 등)를 누르는 방식입니다. 루 상황이 전광판과 학생 화면에 보이고, 안타·타점·득점이 개인 기록에 쌓입니다. 두 팀 모두 선발 명단이 있어야 켜집니다.</p>' : ''}
 <p class="note pad" style="padding-top:6px">종목을 바꾸면 규칙이 그 종목 기본값으로 채워집니다. 이미 시작한 경기가 있을 때는 경기 방식을 바꾸지 않는 것이 좋습니다.</p>
 <div class="center"><button class="btn plain" data-act="delGradeAsk">${esc(gr.label)} 지우기</button></div>`;

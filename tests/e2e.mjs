@@ -196,6 +196,7 @@ try {
     await t.selectOption('#g-sport', 'netball');
     await t.waitForFunction(() => document.querySelector('#g-format').value === 'quarters');
     assert.deepEqual(await t.locator('#g-format option').allInnerTexts(), ['전·후반', '쿼터']);
+    assert.equal(await t.locator('text=득점 단추').count(), 0, '넷볼 설정에는 득점 단추 고르기가 없어야 함');
     await t.selectOption('#g-format', 'halves');
     await t.waitForFunction(() => document.querySelector('#g-format').value === 'halves');
     await t.selectOption('#g-sport', 'futsal');
@@ -248,6 +249,7 @@ try {
       await addGameAndOpen();
       await btn(t, '경기 시작').click();
       await t.waitForFunction((c) => document.body.innerText.includes(c), check);
+      assert.equal(await t.locator('[data-act="gPlus"][data-pts="3"]').count(), sport === 'basket' ? 2 : 0, '1·2·3점 단추는 농구에만');
       if (sport === 'teeball') {
         assert.ok(await t.locator('[data-act="gPlus"][data-team="b"]').isDisabled(), '초에는 나중 팀이 수비라 득점 단추가 꺼져 있어야 함');
         assert.match(await text(t), /공격[\s\S]*수비/);

@@ -40,6 +40,9 @@ export const sportName = (grade) => (grade.sport === 'custom' ? grade.sportName 
 export const isTimed = (grade) => grade.format in TIMED_NAMES;
 export const hasClock = (grade) => isTimed(grade) || grade.format === 'dodge';
 export const usesPicker = (grade) => isTimed(grade) || grade.format === 'innings';
+// 1·2·3점 단추는 농구(와 직접 입력 종목)에서만 쓴다. 그 밖의 종목은 항상 1점씩.
+export const canStep = (grade) => isTimed(grade) && (grade.sport === 'basket' || grade.sport === 'custom');
+export const stepsOf = (grade) => (canStep(grade) && grade.steps === '123' ? [1, 2, 3] : [1]);
 export const partMs = (grade) => Math.max(1, Number(grade.minutes) || 1) * 60000;
 // 같은 득점이 겹쳤는지 물어보는 시간(밀리초). 득점이 빠른 종목은 짧게.
 export const dupWindow = (grade) => (grade.sport === 'basket' || grade.sport === 'netball' ? 5000 : 10000);

@@ -387,3 +387,12 @@ test('어시스트: 득점 기록에 함께 남고 개인 기록에 쌓인다', 
   const rec = Object.fromEntries(L.records(teams, [g], logs).map((r) => [r.key, r]));
   assert.deepEqual([rec['ta/p3'].goals, rec['ta/p3'].as, rec['ta/p5'].goals, rec['ta/p5'].as], [2, 0, 1, 1]);
 });
+
+test('1·2·3점 단추는 농구와 직접 입력 종목에서만', () => {
+  assert.deepEqual(L.stepsOf(L.gradeFromSport('basket', 'x')), [1, 2, 3]);
+  assert.deepEqual(L.stepsOf({ ...L.gradeFromSport('netball', 'x'), steps: '123' }), [1]);
+  assert.deepEqual(L.stepsOf({ ...L.gradeFromSport('futsal', 'x'), steps: '123' }), [1]);
+  assert.deepEqual(L.stepsOf({ ...L.gradeFromSport('custom', 'x'), steps: '123' }), [1, 2, 3]);
+  assert.deepEqual(L.stepsOf({ ...L.gradeFromSport('basket', 'x'), steps: '1' }), [1]);
+  assert.equal(L.canStep(L.gradeFromSport('teeball', 'x')), false);
+});
