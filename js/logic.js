@@ -3,8 +3,8 @@
 const ALL_FORMATS = ['halves', 'quarters', 'single', 'sets', 'innings', 'dodge'];
 
 export const SPORTS = {
-  futsal: { name: '풋살', format: 'halves', formats: ['halves', 'single'], minutes: 10, starters: 5, cards: 3, steps: '1' },
-  soccer: { name: '축구', format: 'halves', formats: ['halves', 'single'], minutes: 15, starters: 8, cards: 3, steps: '1' },
+  futsal: { name: '풋살', format: 'halves', formats: ['halves', 'single'], minutes: 10, starters: 5, cards: 3, steps: '1', assist: true },
+  soccer: { name: '축구', format: 'halves', formats: ['halves', 'single'], minutes: 15, starters: 8, cards: 3, steps: '1', assist: true },
   netball: { name: '넷볼', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 7, cards: 3, steps: '1' },
   basket: { name: '농구', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 5, cards: 5, steps: '123' },
   volley: { name: '배구', format: 'sets', formats: ['sets'], sets: 3, setPoints: 25, starters: 6, cards: 6, steps: '1' },
@@ -27,6 +27,8 @@ export function gradeFromSport(sport, label) {
     label, sport: SPORTS[sport] ? sport : 'custom', sportName: '', format: p.format,
     minutes: p.minutes || 10, sets: p.sets || 3, setPoints: p.setPoints || 25, innings: p.innings || 3,
     starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
+    // assist: 득점할 때 어시스트한 선수도 고른다(시간제 종목).
+    assist: !!p.assist,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
     // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
@@ -188,7 +190,7 @@ export function whenText(g) {
   return out.join(' ');
 }
 
-export function score(g, grade, ctx, team, pts, pid) {
+export function score(g, grade, ctx, team, pts, pid, apid) {
   norm(g, grade); live(g);
   if (grade.format === 'innings' && pts > 0 && team !== attacker(g)) throw new Error('지금은 수비 팀이라 점수를 올릴 수 없습니다.');
   const arr = team === 'a' ? g.pa : g.pb;
@@ -198,7 +200,8 @@ export function score(g, grade, ctx, team, pts, pid) {
   if (!usesPicker(grade)) return [];
   if (pts < 0) return [mk(g, grade, ctx, 'fix', `${ctx.names[team]} 점수 ${pts} (정정)`, { team })];
   const who = (pid && playerLabel(ctx, team, pid)) || '선수 기록 없음';
-  return [mk(g, grade, ctx, 'goal', `${ctx.names[team]} 득점${pts > 1 ? ` +${pts}` : ''} · ${who}`, { team, pid: pid || '', pts, part: g.cur })];
+  const helper = pid && apid && apid !== pid ? playerLabel(ctx, team, apid) : '';
+  return [mk(g, grade, ctx, 'goal', `${ctx.names[team]} 득점${pts > 1 ? ` +${pts}` : ''} · ${who}${helper ? ` (어시스트 ${helper})` : ''}`, { team, pid: pid || '', apid: helper ? apid : '', pts, part: g.cur })];
 }
 
 function finish(g, grade, ctx, logs) {
@@ -419,7 +422,7 @@ export function records(teams, games, logs) {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -438,11 +441,13 @@ export function records(teams, games, logs) {
         const rbi = sum(pas.map((l) => l.rbi || 0)) + mine.filter((l) => l.type === 'run' && l.rbiTo === pid).length;
         const goals = sum(mine.filter((l) => l.type === 'goal' && l.pid === pid).map((l) => l.pts || 1)) + runs;
         r.games++; if (st[pid]) r.starts++; else r.subIn++;
-        r.goals += goals; r.ab += pas.length; r.h += hits.length; r.rbi += rbi;
+        const assists = mine.filter((l) => l.type === 'goal' && l.apid === pid).length;
+        r.goals += goals; r.as += assists; r.ab += pas.length; r.h += hits.length; r.rbi += rbi;
         for (const l of hits) r[l.res] += 1;
         const bits = [st[pid] ? '선발' : '교체 투입'];
         if (pas.length) bits.push(`${pas.length}타석 ${hits.length}안타${rbi ? ` ${rbi}타점` : ''}`);
         if (goals) bits.push(`${goals}${pas.length || runs ? '득점' : '점'}`);
+        if (assists) bits.push(`어시스트 ${assists}`);
         r.detail.push(`${g.no}경기 ${other}전 · ${bits.join(', ')}`);
       }
     }

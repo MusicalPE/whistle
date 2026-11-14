@@ -369,3 +369,21 @@ test('야구는 티볼과 같은 방식에 3아웃제가 기본', () => {
   assert.deepEqual([tb.format, tb.rotate, tb.detail], ['innings', 'all', true]);
   assert.equal(L.gradeFromSport('futsal', 'x').detail, false);
 });
+
+test('어시스트: 득점 기록에 함께 남고 개인 기록에 쌓인다', () => {
+  const grade = L.gradeFromSport('futsal', '6학년');
+  assert.equal(grade.assist, true);
+  assert.equal(L.gradeFromSport('basket', 'x').assist, false);
+  const teams = { ta: { name: '가팀', players: roster(8, 5) }, tb: { name: '나팀', players: roster(8, 5) } };
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  const c = (now) => ctxAt(now, { rosters: { a: teams.ta.players, b: teams.tb.players } });
+  const logs = { x: {} }; let n = 0; const keep = (list) => list.forEach((l) => { logs.x[`l${n++}`] = l; });
+  keep(L.start(g, grade, c(0)));
+  const out = L.score(g, grade, c(1), 'a', 1, 'p3', 'p5'); keep(out);
+  assert.match(out[0].text, /가팀 득점 · 3 선수3 \(어시스트 5 선수5\)/);
+  assert.equal(out[0].apid, 'p5');
+  keep(L.score(g, grade, c(2), 'a', 1, 'p3', 'p3'));
+  keep(L.score(g, grade, c(3), 'a', 1, 'p5', ''));
+  const rec = Object.fromEntries(L.records(teams, [g], logs).map((r) => [r.key, r]));
+  assert.deepEqual([rec['ta/p3'].goals, rec['ta/p3'].as, rec['ta/p5'].goals, rec['ta/p5'].as], [2, 0, 1, 1]);
+});

@@ -108,8 +108,12 @@ try {
     await t.waitForSelector('text=누가 넣었나요?');
     await shot(t, '02b-picker');
     await t.locator('#sheet .pl').nth(1).click();
+    await t.waitForSelector('text=누가 어시스트 했나요?');
+    assert.equal(await t.locator('#sheet .pl').count(), 4, '어시스트 후보에는 득점한 선수가 빠져야 함');
+    await shot(t, '02c-assist');
+    await t.locator('#sheet .pl').first().click();
     await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '1');
-    assert.match(await text(t), /6-1 번개 득점 · 2 한지우/);
+    assert.match(await text(t), /6-1 번개 득점 · 2 한지우 \(어시스트 1 강태윤\)/);
     await t.locator('[data-act="gMinus"][data-team="a"]').click();
     await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '0');
     assert.match(await text(t), /\(취소\)/);
@@ -147,6 +151,7 @@ try {
     assert.equal(await b.locator('.board .pts').first().innerText(), '1');
     await t.locator('[data-act="gPlus"][data-team="b"]').click();
     await t.locator('#sheet .pl').first().click();
+    await sbtn(t, '어시스트 없음').click();
     await s.waitForFunction(() => /1 : 1/.test(document.body.innerText));
     await b.waitForFunction(() => document.querySelectorAll('.board .pts')[1].textContent === '1');
     await shot(s, '06-student'); await shot(b, '07-board');
@@ -158,6 +163,7 @@ try {
     assert.match(await text(t), /전반 종료 1 : 1/);
     await t.locator('[data-act="gPlus"][data-team="a"]').click();
     await t.locator('#sheet .pl').first().click();
+    await sbtn(t, '어시스트 없음').click();
     await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '2');
     await btn(t, '경기 종료').click();
     await sbtn(t, '경기 종료').click();
@@ -268,6 +274,8 @@ try {
     await shot(t, '01-home');
     await btn(t, '대회 목록').click();
     await t.waitForSelector('text=내 대회');
+    assert.match(await t.locator('.tcard').first().innerText(), /내가 만든 대회[\s\S]*햇살초 리그[\s\S]*6학년 풋살[\s\S]*경기 \d+개/);
+    await shot(t, '19-list');
     await t.getByRole('button', { name: /햇살초 리그/ }).click();
     await t.waitForSelector('text=학생용 화면 QR');
     await t.reload();
