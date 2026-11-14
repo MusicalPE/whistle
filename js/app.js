@@ -84,7 +84,7 @@ function qrSvg(url) {
 }
 const nav = (on) => {
   const items = [['home', '홈'], ['games', '경기']];
-  if (isOwner()) items.push(['teams', '팀 명단'], ['settings', '설정']);
+  if (isOwner()) items.push(['settings', '대회 설정']);
   return `<nav class="nav"><a class="navbrand" href="#home" aria-label="휘슬! 홈으로">${brand()}</a>${items.map(([h, t]) => `<a href="#${h}" class="${on === h ? 'on' : ''}">${t}</a>`).join('')}</nav>`;
 };
 const gradeSelect = () => `<select class="input" style="width:auto" data-change="pickGrade" aria-label="학년">${gradeList().map((g) => `<option value="${g.id}"${grade() && g.id === grade().id ? ' selected' : ''}>${esc(g.label)}</option>`).join('')}</select>`;
@@ -205,12 +205,13 @@ function homeScreen() {
 <div class="row between"><h1 class="title">${esc(T().meta.name)}</h1></div>
 <div class="row between small muted"><button class="btn plain" style="height:44px;padding:0" data-act="leaveT">대회 목록</button><a href="#members" class="bold" style="padding:10px 0">함께하는 선생님 ${Object.keys(S.M || {}).length || 1}명${owner ? ' · 초대' : ''}</a></div></header>
 <div class="chips">${chips}</div>
+${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${owner ? '<a href="#teams">팀 명단</a><a href="#rules">종목·규칙</a>' : ''}<a href="#records">개인 기록</a></div>` : ''}
 <div class="cols"><div class="col"><section class="dark row" style="margin:12px 20px 0;gap:16px"><div class="qr" style="width:96px;height:96px;flex:0 0 96px">${qrSvg(`${BASE}?v=${S.tid}`)}</div>
 <div class="stack grow" style="gap:8px"><b>학생용 화면 QR</b><span class="note">로그인 없이 출전 명단과 점수를 실시간으로 봅니다.</span><button class="btn sm white" style="align-self:flex-start" data-act="showQR">크게 띄우기</button></div></section>
 <div class="grid2" style="margin:10px 20px 0"><a class="btn sm" href="${BASE}?b=${S.tid}">전광판 모드</a><button class="btn sm" data-act="copy" data-text="${BASE}?b=${S.tid}" data-msg="전광판 주소를 복사했습니다.">전광판 주소 복사</button></div></div>
 <div class="col"><section class="pad stack" style="padding-top:14px;padding-bottom:16px">${gr ? `<div class="row between"><h2 class="h2">${esc(gr.label)} 경기</h2><span class="small muted">${games.length}경기</span></div>
-${games.map((g) => gameCard(g, `#game/${g.id}`)).join('') || `<p class="note">${owner ? (Object.keys(teamsOf(gr.id)).length < 2 ? '먼저 팀 명단에서 팀을 두 팀 이상 만들어 주세요.' : '아래 단추로 첫 경기를 만들어 보세요.') : '아직 경기가 없습니다.'}</p>`}
-<div class="grid2">${owner ? `<button class="btn sm dash" data-act="addGame">+ 경기 추가</button>` : ''}<a class="btn sm" href="#records">개인 기록</a></div>` : `<p class="note">${owner ? '위의 "+ 학년 추가"로 학년과 종목을 먼저 정해 주세요.' : '아직 학년이 없습니다.'}</p>`}</section></div></div>
+${games.map((g) => gameCard(g, `#game/${g.id}`)).join('') || `<p class="note">${owner ? (Object.keys(teamsOf(gr.id)).length < 2 ? '먼저 위의 "팀 명단"에서 팀을 두 팀 이상 만들어 주세요.' : '아래 단추로 첫 경기를 만들어 보세요.') : '아직 경기가 없습니다.'}</p>`}
+${owner ? `<button class="btn sm dash" data-act="addGame">+ 경기 추가</button>` : ''}` : `<p class="note">${owner ? '위의 "+ 학년 추가"로 학년과 종목을 먼저 정해 주세요.' : '아직 학년이 없습니다.'}</p>`}</section></div></div>
 ${nav('home')}</div>`;
 }
 
@@ -312,7 +313,7 @@ function subScreen(id, side) {
 
 function teamsScreen() {
   const gr = grade();
-  if (!gr) return `<div class="app">${demoBar()}<header class="top"><h1 class="title" style="font-size:22px">팀 명단</h1></header><p class="note pad">홈에서 학년을 먼저 추가해 주세요.</p>${nav('teams')}</div>`;
+  if (!gr) return `<div class="app">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#home">‹ 홈</a><h1>팀 명단</h1></header><p class="note pad">홈에서 학년을 먼저 추가해 주세요.</p><div class="spacer"></div>${nav('home')}</div>`;
   const teams = teamsOf(gr.id), ids = Object.keys(teams);
   if (!teams[S.teamId]) S.teamId = ids[0] || null;
   const t = teams[S.teamId], ps = t ? playersOf(S.teamId) : [];
@@ -323,19 +324,19 @@ ${ps.map((p) => `<div class="prow"><span class="no">${esc(p.no)}</span><span cla
 <div class="prow" style="gap:6px;padding:8px"><input id="p-no" class="input" style="width:64px" inputmode="numeric" placeholder="번호" maxlength="3" aria-label="등번호"><input id="p-name" class="input" placeholder="이름" maxlength="12" aria-label="선수 이름" data-enter="addPlayer"><button class="btn sm primary" data-act="addPlayer">추가</button></div>
 <div class="grid2" style="padding:0 8px 8px"><button class="btn sm" data-act="importAsk">학교 명단에서 불러오기</button><button class="btn sm" data-act="pasteAsk">명단 붙여넣기</button></div>
 <div class="center" style="padding-bottom:6px"><button class="btn sm plain" data-act="delTeam">이 팀 지우기</button></div></section>` : `<p class="note pad mt">"+ 팀 추가"로 팀을 만들어 주세요.</p>`;
-  return `<div class="app narrow">${demoBar()}<header class="top" style="flex-direction:row;align-items:center;justify-content:space-between"><h1 class="title" style="font-size:22px">팀 명단</h1>${gradeSelect()}</header>
+  return `<div class="app narrow">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#home">‹ 홈</a><h1>${esc(gr.label)} 팀 명단 <span class="muted" style="font-size:13px;font-weight:500">· ${esc(L.sportName(gr))}</span></h1></header>
 <div class="chips">${ids.map((id) => `<button class="chip${id === S.teamId ? ' on' : ''}" data-act="pickTeam" data-id="${id}">${esc(teams[id].name)}</button>`).join('')}<button class="chip dash" data-act="addTeam">+ 팀 추가</button></div>${card}
-<p class="note pad" style="padding-top:10px;padding-bottom:16px">선발과 교체는 경기 전에 정해 두면, 경기를 시작할 때 그대로 적용됩니다.</p>${nav('teams')}</div>`;
+<p class="note pad" style="padding-top:10px;padding-bottom:16px">선발과 교체는 경기 전에 정해 두면, 경기를 시작할 때 그대로 적용됩니다.</p><div class="spacer"></div>${nav('home')}</div>`;
 }
 
-function settingsScreen() {
+function rulesScreen() {
   const gr = grade();
   const stepper = (key, val, unit, min, max, label) => `<div class="stepper"><button data-act="step" data-key="${key}" data-d="-1" data-min="${min}" data-max="${max}" aria-label="${label} 줄이기">−</button><b>${val}${unit}</b><button data-act="step" data-key="${key}" data-d="1" data-min="${min}" data-max="${max}" aria-label="${label} 늘리기">+</button></div>`;
   const seg = (key, val, opts) => `<div class="seg" style="margin-right:6px">${opts.map(([v, t]) => `<button class="${String(val) === String(v) ? 'on' : ''}" data-act="setGrade" data-key="${key}" data-val="${v}" aria-pressed="${String(val) === String(v)}">${t}</button>`).join('')}</div>`;
   let rules = '';
   if (gr) {
     const f = gr.format, sp = L.SPORTS[gr.sport] || L.SPORTS.custom;
-    rules = `<h2 class="label" style="padding:14px 20px 6px">${esc(gr.label)} 종목과 규칙</h2><section class="card" style="margin:0 20px">
+    rules = `<section class="card" style="margin:4px 20px 0">
 <div class="set"><label for="g-label">학년 이름</label><input id="g-label" class="input" value="${esc(gr.label)}" maxlength="12" data-change="gradeField" data-key="label"></div>
 <div class="set"><label for="g-sport">종목</label><select id="g-sport" class="input" data-change="gradeSport">${Object.entries(L.SPORTS).map(([k, s]) => `<option value="${k}"${k === gr.sport ? ' selected' : ''}>${s.name}</option>`).join('')}</select></div>
 ${gr.sport === 'custom' ? `<div class="set"><label for="g-sname">종목 이름</label><input id="g-sname" class="input" value="${esc(gr.sportName || '')}" maxlength="12" placeholder="예: 킨볼" data-change="gradeField" data-key="sportName"></div>` : ''}
@@ -354,11 +355,17 @@ ${f === 'innings' && gr.detail ? '<p class="note pad" style="padding-top:6px">�
 <p class="note pad" style="padding-top:6px">종목을 바꾸면 규칙이 그 종목 기본값으로 채워집니다. 이미 시작한 경기가 있을 때는 경기 방식을 바꾸지 않는 것이 좋습니다.</p>
 <div class="center"><button class="btn plain" data-act="delGradeAsk">${esc(gr.label)} 지우기</button></div>`;
   }
-  return `<div class="app narrow">${demoBar()}<header class="top" style="flex-direction:row;align-items:center;justify-content:space-between"><h1 class="title" style="font-size:22px">경기 설정</h1>${gr ? gradeSelect() : ''}</header>
+  return `<div class="app narrow">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#home">‹ 홈</a><h1>${gr ? `${esc(gr.label)} ` : ''}종목·규칙</h1></header>
+${rules || '<p class="note pad mt">홈에서 학년을 먼저 추가해 주세요.</p>'}<div class="spacer"></div>${nav('home')}</div>`;
+}
+
+function settingsScreen() {
+  return `<div class="app narrow">${demoBar()}<header class="top"><h1 class="title" style="font-size:22px">대회 설정</h1></header>
 <h2 class="label" style="padding:6px 20px">대회 (모든 학년 공통)</h2><section class="card" style="margin:0 20px"><div class="set"><label for="t-title">대회 이름</label><input id="t-title" class="input" value="${esc(T().meta.name)}" maxlength="40" data-change="tName"></div></section>
+<p class="note pad" style="padding-top:6px">학년별 팀 명단과 종목·규칙은 홈에서 학년을 고르면 그 아래에 있습니다.</p>
 <div class="pad" style="padding-top:10px"><a class="btn sm block" href="#school">학교 명단 등록 (선택)</a><p class="note" style="padding-top:6px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다.</p></div>
-${rules || '<p class="note pad mt">홈에서 학년을 먼저 추가해 주세요.</p>'}
-<div class="center mt"><button class="btn plain" data-act="signOut">${S.store.demo ? '미리보기 끝내기' : '구글 계정 로그아웃'}</button></div><div class="foot">음악적체육인 · v${VERSION}</div>${nav('settings')}</div>`;
+<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#members">함께하는 선생님 · 초대</a></div>
+<div class="center mt"><button class="btn plain" data-act="signOut">${S.store.demo ? '미리보기 끝내기' : '구글 계정 로그아웃'}</button></div><div class="spacer"></div><div class="foot">음악적체육인 · v${VERSION}</div>${nav('settings')}</div>`;
 }
 
 function schoolScreen() {
@@ -369,7 +376,7 @@ function schoolScreen() {
 ${ps.map((p) => `<div class="prow"><span class="no">${esc(p.no)}</span><span class="grow">${esc(p.name)}</span><button class="x" data-act="delStudent" data-sid="${p.sid}" aria-label="${esc(p.name)} 지우기">×</button></div>`).join('')}
 <div class="prow" style="gap:6px;padding:8px"><input id="s-no" class="input" style="width:64px" inputmode="numeric" placeholder="번호" maxlength="3" aria-label="번호"><input id="s-name" class="input" placeholder="이름" maxlength="12" aria-label="학생 이름" data-enter="addStudent"><button class="btn sm primary" data-act="addStudent">추가</button></div>
 <div class="grid2" style="padding:0 8px 10px"><button class="btn sm" data-act="pasteSchoolAsk">명단 붙여넣기</button><button class="btn sm plain" data-act="delClassAsk">이 반 지우기</button></div></section>` : `<p class="note pad mt">"+ 반 추가"로 반을 만들어 주세요.</p>`;
-  return `<div class="app narrow">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#settings">‹ 설정</a><h1>학교 명단 <span class="muted" style="font-size:13px;font-weight:500">· 선택</span></h1></header>
+  return `<div class="app narrow">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#settings">‹ 대회 설정</a><h1>학교 명단 <span class="muted" style="font-size:13px;font-weight:500">· 선택</span></h1></header>
 <p class="note pad" style="padding-bottom:10px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다. 쓰지 않아도 됩니다. 이 명단은 내 계정에만 저장되고, 학생 화면이나 다른 선생님에게는 보이지 않습니다.</p>
 <div class="chips">${list.map((x) => `<button class="chip${x.id === S.classId ? ' on' : ''}" data-act="pickClass" data-id="${x.id}">${esc(x.name)}</button>`).join('')}<button class="chip dash" data-act="addClass">+ 반 추가</button></div>${card}<div style="height:16px"></div>${nav('settings')}</div>`;
 }
@@ -555,6 +562,7 @@ function screenHtml() {
   if (r.name === 'records') return recordsScreen();
   if (r.name === 'teams' && isOwner()) return teamsScreen();
   if (r.name === 'settings' && isOwner()) return settingsScreen();
+  if (r.name === 'rules' && isOwner()) return rulesScreen();
   if (r.name === 'school' && isOwner()) return schoolScreen();
   return homeScreen();
 }
@@ -801,7 +809,7 @@ const actions = {
   pasteSchoolAsk() { openSheet({ type: 'paste', to: 'school' }); },
   importAsk() {
     const list = classList();
-    if (!list.length) return openSheet({ type: 'confirm', title: '학교 명단이 아직 없습니다', text: '설정의 "학교 명단 등록"에서 학년·반 명단을 먼저 등록하면, 여기서 체크해서 불러올 수 있습니다.', yes: '학교 명단 등록하러 가기', run: 'goSchool' });
+    if (!list.length) return openSheet({ type: 'confirm', title: '학교 명단이 아직 없습니다', text: '대회 설정의 "학교 명단 등록"에서 학년·반 명단을 먼저 등록하면, 여기서 체크해서 불러올 수 있습니다.', yes: '학교 명단 등록하러 가기', run: 'goSchool' });
     return openSheet({ type: 'import', cid: list[0].id, picked: {} });
   },
   goSchool() { location.hash = 'school'; },

@@ -69,6 +69,9 @@ h1, h2, p { margin: 0; }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding: 0 20px 2px; }
 .chips .chip { flex: 0 0 auto; padding: 0 14px; }
 
+.submenu { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 10px 20px 0; padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.submenu .label { margin-right: auto; }
+.submenu a { height: 44px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--ink); text-decoration: none; border: 1px solid var(--ink); }
 .pill { display: inline-flex; align-items: center; gap: 6px; background: var(--ink); color: #fff; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange-on-dark); }
 .tagbox { font-size: 11px; font-weight: 700; background: var(--ink); color: #fff; padding: 2px 6px; border-radius: 4px; }
@@ -193,6 +196,7 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   .btn:not(:disabled):hover, .chip:hover, .pl:not(:disabled):hover, .seg button:hover, .tabs button:hover { filter: brightness(.94); }
   .btn.primary:not(:disabled):hover, .chip.on:hover, .pl.on:hover { filter: brightness(1.35); }
   a.game:hover, button.game:hover { border-color: var(--ink); }
+  .submenu a:hover { background: var(--ink); color: #fff; }
   .tbl button.tr:hover { background: #F0F4FF; }
   .back:hover, .btn.plain:not(:disabled):hover { color: var(--ink); filter: none; }
 }

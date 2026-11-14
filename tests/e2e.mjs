@@ -181,7 +181,10 @@ try {
   });
 
   await step('설정: 규칙 바꾸기와 종목 바꾸면 기본값 채우기', async () => {
-    await t.goto(`${base}#settings`);
+    await t.goto(`${base}#home`);
+    assert.equal(await t.locator('.nav a:not(.navbrand)').count(), 3, '메뉴는 홈·경기·대회 설정');
+    await t.locator('.submenu a', { hasText: '종목·규칙' }).click();
+    await t.waitForSelector('text=6학년 종목·규칙');
     await t.getByRole('button', { name: '교체 카드 늘리기' }).click();
     await t.waitForSelector('text=4장');
     await t.selectOption('#g-sport', 'netball');
@@ -190,6 +193,7 @@ try {
     await t.selectOption('#g-format', 'halves');
     await t.waitForFunction(() => document.querySelector('#g-format').value === 'halves');
     await t.selectOption('#g-sport', 'futsal');
+    await t.goto(`${base}#settings`);
     await t.fill('#t-title', '햇살초 리그'); await t.locator('#t-title').blur();
     await s.waitForFunction(() => /햇살초 리그/.test(document.body.innerText));
     await shot(t, '08-settings');
@@ -197,7 +201,7 @@ try {
 
   await step('피구: 전원 아웃, 시간 종료 동점에서 연장 고르기', async () => {
     await addGrade('5학년', 'dodge');
-    await t.goto(`${base}#settings`);
+    await t.goto(`${base}#rules`);
     for (let i = 0; i < 7; i++) await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
     await t.waitForSelector('text=3명');
     await t.goto(`${base}#teams`);
@@ -271,8 +275,10 @@ try {
   });
 
   await step('학교 명단(선택): 반 등록, 팀 명단에서 체크해서 불러오기', async () => {
-    await t.goto(`${base}#teams`);
-    await t.selectOption('select[data-change="pickGrade"]', { label: '6학년' });
+    await t.goto(`${base}#home`);
+    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('.submenu a', { hasText: '팀 명단' }).click();
+    await t.waitForSelector('text=6학년 팀 명단');
     await btn(t, '학교 명단에서 불러오기').click();
     await t.waitForSelector('text=학교 명단이 아직 없습니다');
     await sbtn(t, '학교 명단 등록하러 가기').click();
@@ -285,8 +291,10 @@ try {
     assert.match(await text(t), /24\s*양도현/);
     await t.fill('#s-name', '선유나'); await btn(t, '추가').click();
     await t.waitForSelector('text=5명');
-    await t.goto(`${base}#teams`);
-    await t.selectOption('select[data-change="pickGrade"]', { label: '6학년' });
+    await t.goto(`${base}#home`);
+    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('.submenu a', { hasText: '팀 명단' }).click();
+    await t.waitForSelector('text=6학년 팀 명단');
     const before = Number((await text(t)).match(/선수 (\d+)명/)[1]);
     await btn(t, '학교 명단에서 불러오기').click();
     await t.waitForSelector('#im-class');
@@ -305,7 +313,7 @@ try {
 
   await step('티볼 타석 기록: 루 상황, 안타·홈런·아웃, 취소, 전원 타격제 공수 교대, 개인 기록', async () => {
     await addGrade('티볼반', 'teeball');
-    await t.goto(`${base}#settings`);
+    await t.goto(`${base}#rules`);
     for (let i = 0; i < 7; i++) await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
     await t.waitForSelector('text=3명');
     await btn(t, '타석 기록').click();
