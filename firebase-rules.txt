@@ -1,0 +1,62 @@
+{
+  "rules": {
+    "t": {
+      "$tid": {
+        ".read": true,
+        "meta": {
+          ".write": "auth != null && (!data.exists() || data.child('owner').val() === auth.uid)",
+          ".validate": "newData.child('owner').val() === auth.uid && newData.child('name').isString()"
+        },
+        "grades": { ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid" },
+        "teams": { ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid" },
+        "display": { ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid" },
+        "games": {
+          ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid",
+          "$game": {
+            ".write": "auth != null && data.exists() && newData.exists() && root.child('m').child($tid).child(auth.uid).exists()"
+          }
+        },
+        "logs": {
+          ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid",
+          "$game": {
+            ".write": "auth != null && root.child('m').child($tid).child(auth.uid).exists()"
+          }
+        }
+      }
+    },
+    "m": {
+      "$tid": {
+        ".read": "auth != null && data.child(auth.uid).exists()",
+        "$uid": {
+          ".write": "auth != null && (root.child('t').child($tid).child('meta/owner').val() === auth.uid || ($uid === auth.uid && !newData.exists()) || ($uid === auth.uid && newData.child('role').val() === 'ref' && root.child('s').child($tid).child('code').exists() && root.child('j').child($tid).child(auth.uid).val() === root.child('s').child($tid).child('code').val()))"
+        }
+      }
+    },
+    "s": {
+      "$tid": {
+        ".read": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid",
+        ".write": "auth != null && root.child('t').child($tid).child('meta/owner').val() === auth.uid"
+      }
+    },
+    "j": {
+      "$tid": {
+        "$uid": {
+          ".read": "auth != null && $uid === auth.uid",
+          ".write": "auth != null && $uid === auth.uid"
+        }
+      }
+    },
+    "codes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && root.child('t').child(newData.val()).child('meta/owner').val() === auth.uid) || (data.exists() && root.child('t').child(data.val()).child('meta/owner').val() === auth.uid))"
+      }
+    },
+    "u": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    }
+  }
+}

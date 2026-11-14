@@ -1,0 +1,10 @@
+{
+  "name": "whistle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node tests/check.mjs",
+    "test": "node --test tests/logic.test.mjs",
+    "e2e": "node tests/e2e.mjs"
+  }
+}

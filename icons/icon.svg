@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="휘슬! 아이콘">
+<rect width="160" height="160" fill="#111827"/>
+<rect x="66" y="62" width="68" height="28" rx="6" fill="#FFFFFF"/>
+<circle cx="66" cy="96" r="36" fill="#FFFFFF"/>
+<circle cx="66" cy="96" r="13" fill="#111827"/>
+<path d="M30 44l-9-11M48 36l-4-13M68 34l2-13" fill="none" stroke="#E8743B" stroke-width="7" stroke-linecap="round"/>
+</svg>

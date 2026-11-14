@@ -1,0 +1,123 @@
+// 저장 부분. 파이어베이스 설정이 있으면 실시간 DB를 쓰고, 없으면 이 기기 안에만 저장하는 미리보기로 돈다.
+// 두 쪽 모두 사용법이 같아서 화면 쪽 코드는 어느 쪽인지 몰라도 된다.
+import { FIREBASE_CONFIG } from './config.js';
+
+// apiKey 와 databaseURL 이 모두 있어야 파이어베이스로 연결한다.
+// 로그인 화면에서 "미리보기로 둘러보기"를 누르면 이 기기에서만 미리보기로 연다.
+const FORCE_KEY = 'whistle-force-demo';
+export const forceDemo = (on) => { if (on) localStorage.setItem(FORCE_KEY, '1'); else localStorage.removeItem(FORCE_KEY); location.reload(); };
+export const CONFIGURED = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
+export const DEMO = !CONFIGURED || localStorage.getItem(FORCE_KEY) === '1';
+const FIREBASE_VERSION = '10.12.2';
+
+export function createStore() {
+  return DEMO ? localStore() : firebaseStore();
+}
+
+const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+
+// 실시간 DB처럼 null·빈 객체·빈 배열은 저장하지 않는다.
+function prune(v) {
+  if (v === null || v === undefined) return undefined;
+  if (Array.isArray(v)) { const a = v.map((x) => (prune(x) === undefined ? null : prune(x))); return a.length ? a : undefined; }
+  if (typeof v === 'object') {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) { const p = prune(x); if (p !== undefined) o[k] = p; }
+    return Object.keys(o).length ? o : undefined;
+  }
+  return v;
+}
+
+let seq = 0;
+const randomId = () => `${Date.now().toString(36)}${(seq++).toString(36).padStart(2, '0')}${Math.random().toString(36).slice(2, 8)}`;
+
+function localStore() {
+  const KEY = 'whistle-demo-v1', USER_KEY = 'whistle-demo-user';
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+  let root = load();
+  let user = localStorage.getItem(USER_KEY) ? { uid: 'demo', name: '나' } : null;
+  const subs = new Set(), authSubs = new Set();
+  const keys = (p) => String(p).split('/').filter(Boolean);
+  const read = (p) => keys(p).reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), root);
+  const write = (p, v) => {
+    const ks = keys(p); let o = root;
+    for (const k of ks.slice(0, -1)) { if (typeof o[k] !== 'object' || o[k] === null) o[k] = {}; o = o[k]; }
+    const pv = prune(clone(v));
+    if (pv === undefined) delete o[ks.at(-1)]; else o[ks.at(-1)] = pv;
+  };
+  const fire = () => { for (const s of [...subs]) s.cb(clone(read(s.path)) ?? null); };
+  const commit = () => { root = prune(root) || {}; localStorage.setItem(KEY, JSON.stringify(root)); fire(); };
+  window.addEventListener('storage', (e) => { if (e.key === KEY) { root = load(); fire(); } });
+
+  return {
+    demo: true,
+    get user() { return user; },
+    onAuth(cb) { authSubs.add(cb); },
+    async signIn() { localStorage.setItem(USER_KEY, '1'); user = { uid: 'demo', name: '나' }; authSubs.forEach((cb) => cb(user)); },
+    async signOut() { localStorage.removeItem(USER_KEY); user = null; authSubs.forEach((cb) => cb(user)); },
+    on(path, cb) { const s = { path, cb }; subs.add(s); cb(clone(read(path)) ?? null); return () => subs.delete(s); },
+    async get(path) { return clone(read(path)) ?? null; },
+    async set(path, v) { write(path, v); commit(); },
+    async update(path, obj) { for (const [k, v] of Object.entries(obj)) write(`${path}/${k}`, v); commit(); },
+    async remove(path) { write(path, null); commit(); },
+    async push(path, v) { const id = randomId(); write(`${path}/${id}`, v); commit(); return id; },
+    async tx(path, fn) {
+      const cur = clone(read(path));
+      if (cur === undefined || cur === null) return null;
+      const next = fn(cur);
+      if (next === undefined) return cur;
+      write(path, next); commit();
+      return clone(read(path)) ?? null;
+    },
+    now: () => Date.now(),
+    id: randomId,
+  };
+}
+
+async function firebaseStore() {
+  const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
+  const [{ initializeApp }, A, D] = await Promise.all([
+    import(`${base}firebase-app.js`), import(`${base}firebase-auth.js`), import(`${base}firebase-database.js`),
+  ]);
+  const app = initializeApp(FIREBASE_CONFIG);
+  const auth = A.getAuth(app), db = D.getDatabase(app);
+  const ref = (p) => D.ref(db, p);
+  let offset = 0;
+  D.onValue(ref('.info/serverTimeOffset'), (s) => { offset = s.val() || 0; });
+  let user = null;
+  const authSubs = new Set();
+  await new Promise((resolve) => {
+    A.onAuthStateChanged(auth, (u) => {
+      user = u ? { uid: u.uid, name: u.displayName || '선생님' } : null;
+      resolve();
+      authSubs.forEach((cb) => cb(user));
+    });
+  });
+
+  return {
+    demo: false,
+    get user() { return user; },
+    onAuth(cb) { authSubs.add(cb); },
+    async signIn() { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); },
+    async signOut() { await A.signOut(auth); },
+    on(path, cb) { return D.onValue(ref(path), (s) => cb(s.val()), () => cb(null)); },
+    async get(path) { return (await D.get(ref(path))).val(); },
+    set: (path, v) => D.set(ref(path), v),
+    update: (path, obj) => D.update(ref(path), obj),
+    remove: (path) => D.remove(ref(path)),
+    async push(path, v) { const r = D.push(ref(path)); await D.set(r, v); return r.key; },
+    // 여러 선생님이 같은 경기를 동시에 고쳐도 서로 덮어쓰지 않게 한다.
+    async tx(path, fn) {
+      let err = null;
+      const res = await D.runTransaction(ref(path), (cur) => {
+        if (cur === null) return cur;
+        err = null;
+        try { return fn(cur); } catch (e) { err = e; return undefined; }
+      });
+      if (err) throw err;
+      return res.snapshot.val();
+    },
+    now: () => Date.now() + offset,
+    id: () => D.push(ref('ids')).key,
+  };
+}
