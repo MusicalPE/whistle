@@ -17,6 +17,11 @@ const S = {
 const T = () => S.T || {};
 const uid = () => (S.store.user ? S.store.user.uid : '');
 const isOwner = () => !!T().meta && T().meta.owner === uid();
+// 권한 단계: owner(대회 만든 사람) > admin(모든 설정) > editor(경기 진행 + 팀 명단·경기 일정) > ref(경기 진행만)
+const ROLE_NAMES = { ref: '경기 진행만', editor: '경기 진행 + 팀 명단·경기 일정', admin: '모든 설정' };
+const myRole = () => (isOwner() ? 'owner' : ((S.M || {})[uid()] || {}).role || 'ref');
+const canRules = () => ['owner', 'admin'].includes(myRole());
+const canTeams = () => ['owner', 'admin', 'editor'].includes(myRole());
 const gradeList = () => Object.entries(T().grades || {}).map(([id, g]) => ({ id, ...g })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const grade = () => { const list = gradeList(); return list.find((g) => g.id === S.gid) || list[0] || null; };
 const teamsOf = (gid) => Object.fromEntries(Object.entries(T().teams || {}).filter(([, t]) => t.gid === gid));
@@ -84,7 +89,7 @@ function qrSvg(url) {
 }
 const nav = (on) => {
   const items = [['home', '홈'], ['games', '경기']];
-  if (isOwner()) items.push(['settings', '대회 설정']);
+  items.push(['settings', '대회 설정']);
   return `<nav class="nav"><a class="navbrand" href="#home" aria-label="휘슬! 홈으로">${brand()}</a>${items.map(([h, t]) => `<a href="#${h}" class="${on === h ? 'on' : ''}">${t}</a>`).join('')}</nav>`;
 };
 const gradeSelect = () => `<select class="input" style="width:auto" data-change="pickGrade" aria-label="학년">${gradeList().map((g) => `<option value="${g.id}"${grade() && g.id === grade().id ? ' selected' : ''}>${esc(g.label)}</option>`).join('')}</select>`;
@@ -184,7 +189,7 @@ function listScreen() {
 <span class="row small" style="gap:6px;flex-wrap:wrap">${t.live ? `<span class="pill"><span class="dot"></span>진행 중 ${t.live}경기</span>` : ''}<span class="info">경기 ${total}개</span><span class="info">끝난 경기 ${t.done}개</span><span class="info">예정 ${t.ready}개</span></span>
 <span class="btn sm primary">대회 열기</span></button>`;
   }).join('');
-  return `<div class="app list">${demoBar()}<header class="hero"><img src="icons/icon.svg" alt="" width="76" height="76"><div><div class="hname">휘슬!</div><div class="hsub">Whistle</div></div></header>
+  return `<div class="app list">${demoBar()}<header class="hero"><img src="icons/icon.svg" alt="" width="76" height="76"><div><div class="hname">휘슬!</div><div class="hsub">Whistle</div></div><div class="hdesc"><b>교사용 대회 커맨드 센터</b><span>점수 · 교체 · 기록은 선생님 폰으로, 학생은 QR로 실시간</span></div></header>
 <div class="top" style="padding-top:20px"><h1 class="title" style="font-size:22px">내 대회</h1></div>
 <div class="pad stack">${cards ? `<div class="tcards">${cards}</div>` : '<p class="note">아직 대회가 없습니다. 아래에서 새 대회를 만들어 보세요.</p>'}
 <div class="cols" style="gap:10px;margin-top:12px"><div class="card p stack" style="margin-bottom:10px"><label class="label" for="new-t">새 대회 만들기</label><input id="new-t" class="input" placeholder="예: 햇살초 스포츠클럽 리그" maxlength="40" data-enter="newT"><button class="btn primary" data-act="newT">대회 만들기</button></div>
@@ -205,20 +210,20 @@ function gameCard(g, href) {
 
 function homeScreen() {
   const gr = grade();
-  const chips = gradeList().map((g) => `<button class="chip${gr && g.id === gr.id ? ' on' : ''}" data-act="pickGrade" data-gid="${g.id}">${esc(g.label)} ${esc(L.sportName(g))}</button>`).join('') + (isOwner() ? `<button class="chip dash" data-act="addGrade">+ 학년 추가</button>` : '');
+  const chips = gradeList().map((g) => `<button class="chip${gr && g.id === gr.id ? ' on' : ''}" data-act="pickGrade" data-gid="${g.id}">${esc(g.label)} ${esc(L.sportName(g))}</button>`).join('') + (canRules() ? `<button class="chip dash" data-act="addGrade">+ 학년 추가</button>` : '');
   const games = gr ? gamesOf(gr.id) : [];
-  const owner = isOwner();
+  const owner = isOwner(), teamsOk = canTeams(), rulesOk = canRules();
   return `<div class="app">${demoBar()}<header class="top">${brand()}
 <div class="row between"><h1 class="title grow">${esc(T().meta.name)}</h1><button class="btn sm" style="flex:0 0 auto" data-act="leaveT">대회 목록</button></div>
 <div class="row small muted" style="justify-content:flex-end"><a href="#members" class="bold" style="padding:10px 0">함께하는 선생님 ${Object.keys(S.M || {}).length || 1}명${owner ? ' · 초대' : ''}</a></div></header>
 <div class="chips">${chips}</div>
-${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${owner ? '<a href="#teams">팀 명단</a><a href="#rules">종목·규칙</a>' : ''}<a href="#records">개인 기록</a>${owner ? '<button class="del" data-act="delGradeAsk">학년 지우기</button>' : ''}</div>` : ''}
+${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${teamsOk ? '<a href="#teams">팀 명단</a>' : ''}${rulesOk ? '<a href="#rules">종목·규칙</a>' : ''}<a href="#records">개인 기록</a>${rulesOk ? '<button class="del" data-act="delGradeAsk">학년 지우기</button>' : ''}</div>` : ''}
 <div class="cols"><div class="col"><section class="dark row" style="margin:12px 20px 0;gap:16px"><div class="qr" style="width:96px;height:96px;flex:0 0 96px">${qrSvg(`${BASE}?v=${S.tid}`)}</div>
 <div class="stack grow" style="gap:8px"><b>학생용 화면 QR</b><span class="note">로그인 없이 출전 명단과 점수를 실시간으로 봅니다.</span><button class="btn sm white" style="align-self:flex-start" data-act="showQR">크게 띄우기</button></div></section>
 <div class="grid2" style="margin:10px 20px 0"><a class="btn sm" href="${BASE}?b=${S.tid}">전광판 모드</a><button class="btn sm" data-act="copy" data-text="${BASE}?b=${S.tid}" data-msg="전광판 주소를 복사했습니다.">전광판 주소 복사</button></div></div>
 <div class="col"><section class="pad stack" style="padding-top:14px;padding-bottom:16px">${gr ? `<div class="row between"><h2 class="h2">${esc(gr.label)} 경기</h2><span class="small muted">${games.length}경기</span></div>
-${games.map((g) => gameCard(g, `#game/${g.id}`)).join('') || `<p class="note">${owner ? (Object.keys(teamsOf(gr.id)).length < 2 ? '먼저 위의 "팀 명단"에서 팀을 두 팀 이상 만들어 주세요.' : '아래 단추로 첫 경기를 만들어 보세요.') : '아직 경기가 없습니다.'}</p>`}
-${owner ? `<button class="btn sm dash" data-act="addGame">+ 경기 추가</button>` : ''}` : `<p class="note">${owner ? '위의 "+ 학년 추가"로 학년과 종목을 먼저 정해 주세요.' : '아직 학년이 없습니다.'}</p>`}</section></div></div>
+${games.map((g) => gameCard(g, `#game/${g.id}`)).join('') || `<p class="note">${teamsOk ? (Object.keys(teamsOf(gr.id)).length < 2 ? '먼저 위의 "팀 명단"에서 팀을 두 팀 이상 만들어 주세요.' : '아래 단추로 첫 경기를 만들어 보세요.') : '아직 경기가 없습니다.'}</p>`}
+${teamsOk ? `<button class="btn sm dash" data-act="addGame">+ 경기 추가</button>` : ''}` : `<p class="note">${rulesOk ? '위의 "+ 학년 추가"로 학년과 종목을 먼저 정해 주세요.' : '아직 학년이 없습니다.'}</p>`}</section></div></div>
 ${nav('home')}</div>`;
 }
 
@@ -262,7 +267,7 @@ function gameScreen(id) {
     const anySent = inn && (orderList(id, 'a', g).length || orderList(id, 'b', g).length);
     const ros = (side) => (inn && orderList(id, side, g).length ? sentRos(side) : rosPlain(side));
     const rosPlain = (side) => `<div class="card lineup ${side}"><b class="t${side}">${esc(teamName(g[side]))}</b>${inn ? '<span class="small muted">타순을 아직 안 냄 · 선발이 번호 순으로 섭니다</span>' : ''}<span class="label">선발</span>${playersOf(g[side]).filter((p) => !p.bench).map((p) => `<span><b>${esc(p.no)}</b> ${esc(p.name)}</span>`).join('') || '<span class="muted">없음</span>'}<span class="label">교체</span>${playersOf(g[side]).filter((p) => p.bench).map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)}</span>`).join('') || '<span class="muted">없음</span>'}</div>`;
-    return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col"><section class="dark stack center" style="margin:0 20px"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))} · ${L.FORMAT_NAMES[gr.format]}</span><div style="font-size:22px;font-weight:900"><span class="ta">${esc(teamName(g.a))}</span> vs <span class="tb">${esc(teamName(g.b))}</span></div>${L.whenText(g) ? `<b>${esc(L.whenText(g))}</b>` : ''}<button class="btn big white block" data-act="gStart" data-id="${id}">경기 시작</button><span class="note">시작하면 지금 팀 명단의 선발·교체가 이 경기에 적용됩니다.${inn ? ' 타순을 낸 팀은 낸 타순대로 섭니다.' : ''}</span>${inn ? `<button class="btn sm block" data-act="orderQR" data-id="${id}">타순 제출 QR 띄우기</button><span class="note">기록 방식: ${gr.detail ? `타석 기록 (${gr.rotate === 'out3' ? '3아웃제' : '전원 타격제'})` : '점수만 · 타석마다 안타·아웃을 기록하려면 시작하기 전에 "종목·규칙"에서 타석 기록으로 바꿔 주세요'}</span>` : ''}</section>${isOwner() ? `<div class="grid2" style="margin:12px 20px 0"><button class="btn sm" data-act="whenAsk" data-id="${id}">일정 ${L.whenText(g) ? '바꾸기' : '넣기'}</button><button class="btn sm plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>${anySent ? `<div class="center"><button class="btn plain" data-act="orderClear" data-id="${id}">받은 타순 지우기</button></div>` : ''}` : ''}</div>
+    return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col"><section class="dark stack center" style="margin:0 20px"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))} · ${L.FORMAT_NAMES[gr.format]}</span><div style="font-size:22px;font-weight:900"><span class="ta">${esc(teamName(g.a))}</span> vs <span class="tb">${esc(teamName(g.b))}</span></div>${L.whenText(g) ? `<b>${esc(L.whenText(g))}</b>` : ''}<button class="btn big white block" data-act="gStart" data-id="${id}">경기 시작</button><span class="note">시작하면 지금 팀 명단의 선발·교체가 이 경기에 적용됩니다.${inn ? ' 타순을 낸 팀은 낸 타순대로 섭니다.' : ''}</span>${inn ? `<button class="btn sm block" data-act="orderQR" data-id="${id}">타순 제출 QR 띄우기</button><span class="note">기록 방식: ${gr.detail ? `타석 기록 (${gr.rotate === 'out3' ? '3아웃제' : '전원 타격제'})` : '점수만 · 타석마다 안타·아웃을 기록하려면 시작하기 전에 "종목·규칙"에서 타석 기록으로 바꿔 주세요'}</span>` : ''}</section>${canTeams() ? `<div class="grid2" style="margin:12px 20px 0"><button class="btn sm" data-act="whenAsk" data-id="${id}">일정 ${L.whenText(g) ? '바꾸기' : '넣기'}</button><button class="btn sm plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>${anySent ? `<div class="center"><button class="btn plain" data-act="orderClear" data-id="${id}">받은 타순 지우기</button></div>` : ''}` : ''}</div>
 <div class="col"><section class="grid2" style="margin:12px 20px 0">${ros('a')}${ros('b')}</section></div></div>${nav('games')}</div>`;
   }
   const liveNow = g.status === 'live';
@@ -296,7 +301,7 @@ function gameScreen(id) {
 <div><span class="name ta">${esc(teamName(g.a))}${role('a')}</span><span class="num big" data-score="a">${a}</span>${btns('a')}</div>
 <div><span class="name tb">${esc(teamName(g.b))}${role('b')}</span><span class="num big" data-score="b">${b}</span>${btns('b')}</div></div>${hint ? `<span class="note center">${hint}</span>` : ''}</section>`;
   const table = partsTable(g, gr);
-  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${isOwner() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
+  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
 }
 
 function subScreen(id, side) {
@@ -326,7 +331,8 @@ function teamsScreen() {
   const t = teams[S.teamId], ps = t ? playersOf(S.teamId) : [];
   const starters = ps.filter((p) => !p.bench).length;
   const card = t ? `<section class="card" style="margin:12px 20px 0"><div class="set"><label for="t-name">팀 이름</label><input id="t-name" class="input" value="${esc(t.name)}" maxlength="20" data-change="teamName"></div>
-<div class="set" style="border-bottom:1px solid var(--line)"><span class="muted small">선수 ${ps.length}명 · 선발 ${starters} / 교체 ${ps.length - starters}${starters !== Number(gr.starters) ? ` · 설정의 선발 인원은 ${gr.starters}명` : ''}</span></div>
+<div class="set" style="border-bottom:1px solid var(--line)"><span class="muted small">선수 ${ps.length}명 · 선발 ${starters} / 교체 ${ps.length - starters}${starters < Number(gr.starters) ? ` · 설정의 선발 인원은 ${gr.starters}명` : ''}</span></div>
+${starters > Number(gr.starters) ? `<div class="set" style="flex-wrap:wrap;background:#FFF4E5;border-bottom:1px solid var(--line)"><b style="color:#7A3E00">선발이 ${starters}명입니다. ${esc(L.sportName(gr))} 선발은 ${gr.starters}명까지입니다.</b><button class="btn sm primary" data-act="trimStarters">번호 순으로 ${gr.starters}명만 선발로</button></div>` : ''}
 ${ps.map((p) => `<div class="prow"><span class="no">${esc(p.no)}</span><span class="grow">${esc(p.name)}</span><div class="seg"><button class="${p.bench ? '' : 'on'}" data-act="setBench" data-pid="${p.pid}" data-bench="0" aria-pressed="${!p.bench}">선발</button><button class="${p.bench ? 'on' : ''}" data-act="setBench" data-pid="${p.pid}" data-bench="1" aria-pressed="${!!p.bench}">교체</button></div><button class="x" data-act="delPlayer" data-pid="${p.pid}" aria-label="${esc(p.name)} 지우기">×</button></div>`).join('')}
 <div class="prow" style="gap:6px;padding:8px"><input id="p-no" class="input" style="width:64px" inputmode="numeric" placeholder="번호" maxlength="3" aria-label="등번호"><input id="p-name" class="input" placeholder="이름" maxlength="12" aria-label="선수 이름" data-enter="addPlayer"><button class="btn sm primary" data-act="addPlayer">추가</button></div>
 <div class="grid2" style="padding:0 8px 8px"><button class="btn sm" data-act="importAsk">학교 명단에서 불러오기</button><button class="btn sm" data-act="pasteAsk">명단 붙여넣기</button></div>
@@ -371,10 +377,10 @@ ${rules || '<p class="note pad mt">홈에서 학년을 먼저 추가해 주세�
 
 function settingsScreen() {
   return `<div class="app narrow">${demoBar()}<header class="top"><h1 class="title" style="font-size:22px">대회 설정</h1></header>
-<h2 class="label" style="padding:6px 20px">대회 (모든 학년 공통)</h2><section class="card" style="margin:0 20px"><div class="set"><label for="t-title">대회 이름</label><input id="t-title" class="input" value="${esc(T().meta.name)}" maxlength="40" data-change="tName"></div></section>
-<p class="note pad" style="padding-top:6px">학년별 팀 명단과 종목·규칙은 홈에서 학년을 고르면 그 아래에 있습니다.</p>
-<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#school">학교 명단 등록 (선택)</a><p class="note" style="padding-top:6px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다.</p></div>
-<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#members">함께하는 선생님 · 초대</a></div>
+${canRules() ? `<h2 class="label" style="padding:6px 20px">대회 (모든 학년 공통)</h2><section class="card" style="margin:0 20px"><div class="set"><label for="t-title">대회 이름</label><input id="t-title" class="input" value="${esc(T().meta.name)}" maxlength="40" data-change="tName"></div></section>
+<p class="note pad" style="padding-top:6px">학년별 팀 명단과 종목·규칙은 홈에서 학년을 고르면 그 아래에 있습니다.</p>` : `<p class="note pad">내 권한: ${ROLE_NAMES[myRole()] || ''}. 바꾸려면 대회 만든 선생님께 부탁해 주세요.</p>`}
+${canTeams() ? `<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#school">학교 명단 등록 (선택)</a><p class="note" style="padding-top:6px">학년·반 명단을 한 번 등록해 두면, 팀 명단을 만들 때 체크해서 불러올 수 있습니다.</p></div>` : ''}
+<div class="pad" style="padding-top:10px"><a class="btn sm block" href="#members">함께하는 선생님${isOwner() ? ' · 초대와 권한' : ''}</a></div>
 <div class="center mt"><button class="btn plain" data-act="signOut">${S.store.demo ? '미리보기 끝내기' : '구글 계정 로그아웃'}</button></div><div class="spacer"></div><div class="foot">음악적체육인 · v${VERSION}</div>${nav('settings')}</div>`;
 }
 
@@ -395,9 +401,10 @@ function membersScreen() {
   const owner = isOwner();
   const list = Object.entries(S.M || {}).sort((a, b) => (a[1].role === 'owner' ? -1 : 1) - (b[1].role === 'owner' ? -1 : 1));
   const codeBox = owner ? `<section class="dark stack" style="margin:4px 20px 0"><span class="label">${esc(T().meta.name)} · 초대 코드</span><span class="num" style="font-size:52px;letter-spacing:.08em">${esc(S.code || '······')}</span><span class="note">초대받은 선생님이 구글로 로그인하고 코드를 넣으면, 이 대회의 경기를 함께 진행할 수 있습니다.</span>
+${S.code ? `<div class="row" style="gap:14px"><div class="qr" style="width:120px;height:120px;flex:0 0 120px">${qrSvg(`${BASE}?join=${S.code}`)}</div><span class="note">QR을 찍으면 초대 링크로 바로 들어옵니다. 구글 로그인만 하면 코드를 따로 넣지 않아도 됩니다.</span></div>` : ''}
 <div class="grid2"><button class="btn sm white" data-act="copy" data-text="${BASE}?join=${esc(S.code)}" data-msg="초대 링크를 복사했습니다.">초대 링크 복사</button><button class="btn sm" data-act="newCode">코드 새로 만들기</button></div></section>` : '';
-  const people = `<section class="pad stack" style="padding-top:18px"><h2 class="h2" style="font-size:14px">참여 중 <span class="muted" style="font-weight:500">· ${list.length}명</span></h2><div class="card">${list.map(([id, m]) => `<div class="set" style="min-height:60px"><b>${id === uid() ? '나' : esc(m.name)}</b>${m.role === 'owner' ? '<span class="tagbox" style="margin-right:6px">대회 만든 사람</span>' : owner ? `<button class="btn plain" data-act="kick" data-uid="${id}">내보내기</button>` : '<span class="small muted" style="margin-right:6px">심판</span>'}</div>`).join('')}</div></section>`;
-  const info = `<section class="card p stack" style="margin:16px 20px 0;gap:6px"><h2 class="h2" style="font-size:13px">초대받은 선생님이 할 수 있는 일</h2><p class="note">경기 진행만 맡습니다. 경기 시작·종료, 점수, 득점 선수, 선수 교체를 할 수 있고, 한 경기를 여러 선생님이 같이 조작할 수 있습니다.</p><p class="note">팀 명단, 경기 설정, 초대, 경기 추가·삭제는 대회 만든 사람만 합니다.</p></section>`;
+  const people = `<section class="pad stack" style="padding-top:18px"><h2 class="h2" style="font-size:14px">참여 중 <span class="muted" style="font-weight:500">· ${list.length}명</span></h2><div class="card">${list.map(([id, m]) => `<div class="set" style="min-height:60px;flex-wrap:wrap"><b>${id === uid() ? '나' : esc(m.name)}</b>${m.role === 'owner' ? '<span class="tagbox" style="margin-right:6px">대회 만든 사람</span>' : owner ? `<span class="row" style="gap:4px"><select class="input" style="max-width:none;text-align:left" aria-label="${esc(m.name)} 권한" data-change="memberRole" data-uid="${id}">${Object.entries(ROLE_NAMES).map(([k, t]) => `<option value="${k}"${(m.role || 'ref') === k ? ' selected' : ''}>${t}</option>`).join('')}</select><button class="btn plain" data-act="kick" data-uid="${id}">내보내기</button></span>` : `<span class="small muted" style="margin-right:6px">${ROLE_NAMES[m.role] || ROLE_NAMES.ref}</span>`}</div>`).join('')}</div></section>`;
+  const info = `<section class="card p stack" style="margin:16px 20px 0;gap:6px"><h2 class="h2" style="font-size:13px">선생님마다 권한을 정할 수 있습니다</h2><p class="note"><b>경기 진행만</b>: 경기 시작·종료, 점수, 득점 선수, 선수 교체. 처음 들어오면 이 권한입니다.</p><p class="note"><b>경기 진행 + 팀 명단·경기 일정</b>: 팀과 선수 명단, 경기 추가·삭제·일정, 전광판에 개인 기록 띄우기까지.</p><p class="note"><b>모든 설정</b>: 학년 추가·삭제, 종목·규칙, 대회 이름까지.</p><p class="note">초대, 내보내기, 권한 바꾸기는 대회 만든 사람만 합니다. 한 경기를 여러 선생님이 같이 조작할 수 있습니다.</p></section>`;
   return `<div class="app">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#home">‹ 홈</a><h1>함께하는 선생님</h1></header>
 <div class="cols"><div class="col">${codeBox}${owner ? info : people}</div><div class="col">${owner ? people : info}</div></div>
 ${owner ? '' : `<div class="center mt"><button class="btn plain" data-act="quitT">이 대회에서 나가기</button></div>`}<div class="spacer"></div>${nav('home')}</div>`;
@@ -431,7 +438,7 @@ function recordsScreen() {
   const detail = sel ? `<section class="dark stack"><div class="row between"><b style="font-size:18px">${esc(sel.no)} ${esc(sel.name)}</b><span class="label">${esc(sel.team)}</span></div><div class="grid3 center">${(tee ? [['타석', sel.ab], ['안타', sel.h], ['타점', sel.rbi], ['득점', sel.goals], ['홈런', sel.hr], ['출전 경기', sel.games]] : withAs ? [['출전 경기', sel.games], ['득점', sel.goals], ['어시스트', sel.as]] : [['출전 경기', sel.games], ['득점', sel.goals], ['선발 출전', sel.starts]]).map(([t, v]) => `<div class="stack" style="gap:2px"><span class="num" style="font-size:36px">${v}</span><span class="note">${t}</span></div>`).join('')}</div><div class="note" style="border-top:1px solid #39424F;padding-top:8px;line-height:1.6">${tee ? `1루타 ${sel.h1} · 2루타 ${sel.h2} · 3루타 ${sel.h3} · 홈런 ${sel.hr}<br>` : ''}${sel.detail.map(esc).join('<br>')}</div></section>` : '';
   return `<div class="app">${demoBar()}<header class="bar" style="justify-content:flex-start"><a class="back" href="#home">‹ 홈</a><h1>개인 기록 <span class="muted" style="font-size:13px;font-weight:500">· 선생님만</span></h1></header>
 <div class="cols"><div class="col pad stack">${filters}${table}</div>
-<div class="col pad stack colgap">${isOwner() ? `<button class="btn ${shown ? '' : 'primary'} block" data-act="recBoard">${shown ? '전광판에서 내리기' : '전광판에 띄워서 보여 주기'}</button>` : ''}${detail}<p class="note">학생 화면(QR)에는 나오지 않습니다. 선생님이 전광판에 띄울 때만 보입니다.</p></div></div><div class="spacer"></div>${nav('home')}</div>`;
+<div class="col pad stack colgap">${canTeams() ? `<button class="btn ${shown ? '' : 'primary'} block" data-act="recBoard">${shown ? '전광판에서 내리기' : '전광판에 띄워서 보여 주기'}</button>` : ''}${detail}<p class="note">학생 화면(QR)에는 나오지 않습니다. 선생님이 전광판에 띄울 때만 보입니다.</p></div></div><div class="spacer"></div>${nav('home')}</div>`;
 }
 
 // ---------- 학생 화면 ----------
@@ -555,6 +562,7 @@ function sheetHtml() {
     return `<div class="sheet" role="dialog" aria-label="같은 득점 확인"><h2>방금 ${esc(teamName(g[s.team]))} 득점이 기록됐습니다.</h2><p class="note" style="font-size:14px">다른 선생님이 이미 올린 득점일 수 있습니다. 한 번 더 올릴까요?</p>
 <button class="btn primary big" data-act="closeSheet">올리지 않기</button><button class="btn" data-act="dupYes">새 득점이 맞음 · 한 번 더 올리기</button></div>`;
   }
+  if (s.type === 'notice') return `<div class="sheet" role="alertdialog" aria-label="안내"><h2>${esc(s.title)}</h2><p class="note" style="font-size:14px">${esc(s.text)}</p><button class="btn primary big" data-act="closeSheet">확인</button></div>`;
   if (s.type === 'confirm') return `<div class="sheet" role="dialog"><h2>${esc(s.title)}</h2>${s.text ? `<p class="note" style="font-size:14px">${esc(s.text)}</p>` : ''}<button class="btn primary big" data-act="confirmYes">${esc(s.yes)}</button>${close}</div>`;
   if (s.type === 'qr') return `<div class="sheet" role="dialog" aria-label="학생용 QR"><h2>학생용 화면 QR</h2><div class="qr" style="width:min(100%,360px);aspect-ratio:1;align-self:center;border:1px solid var(--line)">${qrSvg(`${BASE}?v=${S.tid}`)}</div><button class="btn" data-act="copy" data-text="${BASE}?v=${S.tid}" data-msg="학생용 주소를 복사했습니다.">학생용 주소 복사</button>${close.replace('취소', '닫기')}</div>`;
   if (s.type === 'dp') {
@@ -598,10 +606,10 @@ function screenHtml() {
   if (r.name === 'games') return gamesScreen();
   if (r.name === 'members') return membersScreen();
   if (r.name === 'records') return recordsScreen();
-  if (r.name === 'teams' && isOwner()) return teamsScreen();
-  if (r.name === 'settings' && isOwner()) return settingsScreen();
-  if (r.name === 'rules' && isOwner()) return rulesScreen();
-  if (r.name === 'school' && isOwner()) return schoolScreen();
+  if (r.name === 'teams' && canTeams()) return teamsScreen();
+  if (r.name === 'settings') return settingsScreen();
+  if (r.name === 'rules' && canRules()) return rulesScreen();
+  if (r.name === 'school' && canTeams()) return schoolScreen();
   return homeScreen();
 }
 
@@ -688,7 +696,10 @@ const actions = {
       const tid = await S.store.get(`codes/${code}`); if (!tid) return toast('코드를 찾을 수 없습니다.');
       const me = S.store.user;
       const meta = await S.store.get(`t/${tid}/meta`);
-      if (meta && meta.owner !== me.uid) {
+      // 이미 참여 중이면 받은 권한을 그대로 둔다(다시 들어와도 '경기 진행만'으로 내려가지 않게).
+      let already = false;
+      try { already = !!(await S.store.get(`m/${tid}/${me.uid}`)); } catch { already = false; }
+      if (meta && meta.owner !== me.uid && !already) {
         await S.store.set(`j/${tid}/${me.uid}`, code);
         await S.store.set(`m/${tid}/${me.uid}`, { name: me.name, role: 'ref' });
       }
@@ -753,7 +764,12 @@ const actions = {
   },
   async saveWhen() { await S.store.update(`t/${S.tid}/games/${S.sheet.id}`, readWhen()); S.sheet = null; render(true); },
   async delGameGo() { const id = S.sheet.id; location.hash = 'home'; await S.store.update(`t/${S.tid}`, { [`games/${id}`]: null, [`logs/${id}`]: null, [`orders/${id}`]: null }); },
-  gStart(d) { return act(d.id, L.start); },
+  gStart(d) {
+    const g = gameOf(d.id), gr = T().grades[g.gid], n = Number(gr.starters);
+    const over = ['a', 'b'].filter((side) => !(gr.format === 'innings' && orderList(d.id, side, g).length) && playersOf(g[side]).filter((p) => !p.bench).length > n);
+    if (over.length) return openSheet({ type: 'notice', title: '선발 인원이 설정보다 많습니다', text: `${L.sportName(gr)} 선발은 ${n}명인데 ${over.map((side) => `${teamName(g[side])} ${playersOf(g[side]).filter((p) => !p.bench).length}명`).join(', ')}입니다. 팀 명단에서 선발을 맞춘 뒤 시작해 주세요.` });
+    return act(d.id, L.start);
+  },
   gClock(d) { return act(d.id, L.toggleClock); },
   gNext(d) { return act(d.id, L.nextPart); },
   gEndAsk(d) { openSheet({ type: 'confirm', title: '경기를 끝낼까요?', text: '끝낸 경기는 다시 진행할 수 없습니다.', yes: '경기 종료', run: 'gEnd', id: d.id }); },
@@ -829,7 +845,16 @@ const actions = {
     await S.store.set(`${teamPath()}/players/${S.store.id()}`, { no, name, bench });
     render(true); const el = document.getElementById('p-name'); if (el) el.focus();
   },
-  setBench(d) { return S.store.update(`${teamPath()}/players/${d.pid}`, { bench: d.bench === '1' }); },
+  setBench(d) {
+    const ps = playersOf(S.teamId), p = ps.find((x) => x.pid === d.pid), n = Number(grade().starters);
+    if (d.bench === '0' && p && p.bench && ps.filter((x) => !x.bench).length >= n) return openSheet({ type: 'notice', title: `선발은 ${n}명까지입니다`, text: `${L.sportName(grade())} 선발 인원이 ${n}명으로 정해져 있습니다. 다른 선수를 교체로 바꾼 뒤 다시 눌러 주세요. 인원은 종목·규칙에서 바꿀 수 있습니다.` });
+    return S.store.update(`${teamPath()}/players/${d.pid}`, { bench: d.bench === '1' });
+  },
+  async trimStarters() {
+    const n = Number(grade().starters), up = {};
+    playersOf(S.teamId).filter((p) => !p.bench).slice(n).forEach((p) => { up[`${p.pid}/bench`] = true; });
+    if (Object.keys(up).length) await S.store.update(`${teamPath()}/players`, up);
+  },
   delPlayer(d) { return S.store.remove(`${teamPath()}/players/${d.pid}`); },
   pasteAsk() { openSheet({ type: 'paste' }); },
   async savePaste() {
@@ -903,6 +928,7 @@ const changes = {
   gradeSport(el) { const gr = grade(); S.store.update(gradePath(), { ...L.gradeFromSport(el.value, gr.label), sportName: gr.sportName || '' }); },
   recTeam(el) { S.rec.team = el.value; S.rec.key = null; render(true); },
   recSort(el) { S.rec.sort = el.value; render(true); },
+  memberRole(el) { S.store.update(`m/${S.tid}/${el.dataset.uid}`, { role: el.value }).catch((e) => toast(friendly(e))); },
   importClass(el) { S.sheet.cid = el.value; S.sheet.picked = {}; render(true); },
   // 시에 13~23을 적으면 오후로, 0은 오전 12시로 바꾼다. 오전·오후를 안 골랐으면 학교 시간에 맞춰 짐작한다.
   whenHour(el) {

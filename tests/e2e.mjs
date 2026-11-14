@@ -271,6 +271,8 @@ try {
   await step('초대 코드 화면, 대회 목록으로 나갔다 다시 열기', async () => {
     await t.goto(`${base}#members`);
     await t.waitForFunction(() => /[A-Z]{2}\d{4}/.test(document.body.innerText));
+    assert.ok(await t.locator('.dark .qr svg').count(), '초대 QR이 있어야 함');
+    assert.match(await text(t), /경기 진행 \+ 팀 명단·경기 일정[\s\S]*모든 설정/);
     await shot(t, '12-members');
     await t.goto(`${base}#home`);
     await shot(t, '01-home');
@@ -470,6 +472,33 @@ try {
     assert.equal(await t.locator('a.game').count(), 1);
     await s.waitForFunction(() => !/순위표[\s\S]*6-1 번개\s*1\s*1/.test(document.body.innerText));
     assert.match(await text(s), /6-1 번개\s*0\s*0\s*0\s*0\s*0/);
+  });
+
+  await step('선발 인원 제한: 넘게 고르면 안내 창, 설정보다 많으면 맞추기 단추, 시작도 막힘', async () => {
+    await t.goto(`${base}#home`);
+    await t.getByRole('button', { name: /^6학년/ }).click();
+    await t.locator('.submenu a', { hasText: '팀 명단' }).click();
+    await t.getByRole('button', { name: '6-1 번개', exact: true }).click();
+    await t.waitForSelector('text=선발 5 /');
+    await t.locator('.prow .seg button[data-bench="0"]:not(.on)').first().click();
+    await t.waitForSelector('text=선발은 5명까지입니다');
+    await sbtn(t, '확인').click();
+    await t.waitForSelector('text=선발 5 /');
+    await t.goto(`${base}#rules`);
+    await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
+    await t.waitForSelector('text=4명');
+    await t.goto(`${base}#home`);
+    await t.locator('a.game').first().click();
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('text=선발 인원이 설정보다 많습니다');
+    await sbtn(t, '확인').click();
+    assert.ok(await btn(t, '경기 시작').count(), '시작되지 않아야 함');
+    await t.goto(`${base}#teams`);
+    await t.getByRole('button', { name: '6-1 번개', exact: true }).click();
+    await t.waitForSelector('text=풋살 선발은 4명까지입니다');
+    await btn(t, '번호 순으로 4명만 선발로').click();
+    await t.waitForSelector('text=선발 4 /');
+    assert.equal(await t.locator('text=선발은 4명까지입니다').count(), 0);
   });
 
   await step('홈에서 학년 지우기: 그 학년의 팀·경기도 함께 지워짐', async () => {
