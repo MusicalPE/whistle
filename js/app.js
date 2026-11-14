@@ -184,7 +184,8 @@ function listScreen() {
 <span class="row small" style="gap:6px;flex-wrap:wrap">${t.live ? `<span class="pill"><span class="dot"></span>진행 중 ${t.live}경기</span>` : ''}<span class="info">경기 ${total}개</span><span class="info">끝난 경기 ${t.done}개</span><span class="info">예정 ${t.ready}개</span></span>
 <span class="btn sm primary">대회 열기</span></button>`;
   }).join('');
-  return `<div class="app list">${demoBar()}<div class="top">${brand()}<h1 class="title">내 대회</h1></div>
+  return `<div class="app list">${demoBar()}<header class="hero"><img src="icons/icon.svg" alt="" width="76" height="76"><div><div class="hname">휘슬!</div><div class="hsub">Whistle</div></div></header>
+<div class="top" style="padding-top:20px"><h1 class="title" style="font-size:22px">내 대회</h1></div>
 <div class="pad stack">${cards ? `<div class="tcards">${cards}</div>` : '<p class="note">아직 대회가 없습니다. 아래에서 새 대회를 만들어 보세요.</p>'}
 <div class="cols" style="gap:10px;margin-top:12px"><div class="card p stack" style="margin-bottom:10px"><label class="label" for="new-t">새 대회 만들기</label><input id="new-t" class="input" placeholder="예: 햇살초 스포츠클럽 리그" maxlength="40" data-enter="newT"><button class="btn primary" data-act="newT">대회 만들기</button></div>
 <div class="card p stack"><label class="label" for="join-code">초대 코드로 참여 (심판 선생님)</label><input id="join-code" class="input" placeholder="예: HW4827" maxlength="12" value="${esc(S.code)}" data-enter="joinT"><button class="btn" data-act="joinT">참여하기</button></div></div>
