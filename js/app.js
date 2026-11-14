@@ -1,12 +1,14 @@
 // 휘슬! 화면. 주소에 따라 선생님 화면, 학생 화면(?v=대회), 전광판(?b=대회)으로 열린다.
 import { VERSION } from './version.js';
 import * as L from './logic.js';
-import { createStore, forceDemo, CONFIGURED } from './store.js';
+import { createStore, forceDemo, CONFIGURED, TRY, TID_KEY } from './store.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const params = new URLSearchParams(location.search);
 const MODE = params.get('v') ? 'student' : params.get('b') ? 'board' : params.get('o') ? 'order' : 'teacher';
 const BASE = location.origin + location.pathname;
+// 체험용 미리보기(?demo)에서는 학생 화면·전광판 주소에도 demo 를 붙여 같은 지어낸 대회를 보게 한다.
+const DQ = TRY ? '&demo' : '', HOME = BASE + (TRY ? '?demo' : '');
 const S = {
   store: null, tid: null, T: null, M: {}, my: [], gid: null, sheet: null, tab: 'live', teamId: null,
   sub: {}, rec: { team: '', sort: 'goals', key: null }, boardGame: null, off: [], dirty: false, code: '',
@@ -117,7 +119,7 @@ async function act(gameId, fn) {
 
 // ---------- 공통 조각 ----------
 const brand = () => `<div class="brand"><img src="icons/icon.svg" alt=""><b>휘슬!</b><span>Whistle</span></div>`;
-const demoBar = () => (S.store.demo ? `<div class="demo">미리보기 · 이 기기 안에만 저장됩니다</div>` : '');
+const demoBar = () => (S.store.demo ? `<div class="demo">${TRY ? '미리보기 · 지어낸 대회입니다. 눌러 본 것은 이 기기에만 남습니다' : '미리보기 · 이 기기 안에만 저장됩니다'}</div>` : '');
 const logRow = (l) => `<div class="log${l.x ? ' cut' : ''}"><b>${esc(l.tag)}</b><span>${esc(l.text)}${l.x ? ' (취소)' : ''}</span></div>`;
 const clockSpan = (g, cls = '') => `<span class="num ${cls}" data-clock="${g.id}">${L.fmtClock(L.clockLeft(g, S.store.now()))}</span>`;
 function qrSvg(url) {
@@ -268,9 +270,9 @@ function gamesScreen() {
   const liveElse = gradeList().filter((g) => !gr || g.id !== gr.id).flatMap((g) => gamesOf(g.id)).filter((g) => g.status === 'live');
   return `<div class="app">${demoBar()}<header class="top"><h1 class="title" style="font-size:22px">경기</h1></header>
 <div class="chips">${gradeChips(false)}</div>
-<div class="cols"><div class="col"><section class="dark row" style="margin:12px 20px 0;gap:16px"><div class="qr" style="width:96px;height:96px;flex:0 0 96px">${qrSvg(`${BASE}?v=${S.tid}`)}</div>
+<div class="cols"><div class="col"><section class="dark row" style="margin:12px 20px 0;gap:16px"><div class="qr" style="width:96px;height:96px;flex:0 0 96px">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div>
 <div class="stack grow" style="gap:8px"><b>학생용 화면 QR</b><span class="note">로그인 없이 출전 명단과 점수를 실시간으로 봅니다.</span><button class="btn sm white" style="align-self:flex-start" data-act="showQR">크게 띄우기</button></div></section>
-<div class="grid2" style="margin:10px 20px 0"><a class="btn sm" href="${BASE}?b=${S.tid}">전광판 모드</a><button class="btn sm" data-act="copy" data-text="${BASE}?b=${S.tid}" data-msg="전광판 주소를 복사했습니다.">전광판 주소 복사</button></div></div>
+<div class="grid2" style="margin:10px 20px 0"><a class="btn sm" href="${BASE}?b=${S.tid}${DQ}">전광판 모드</a><button class="btn sm" data-act="copy" data-text="${BASE}?b=${S.tid}${DQ}" data-msg="전광판 주소를 복사했습니다.">전광판 주소 복사</button></div></div>
 <div class="col"><section class="pad stack" style="padding-top:14px;padding-bottom:16px">${gr ? `<div class="row between"><h2 class="h2">${esc(gr.label)} 경기</h2><span class="small muted">${games.length}경기</span></div>
 ${games.map((g) => gameCard(g, `#game/${g.id}`)).join('') || `<p class="note">${teamsOk ? (Object.keys(teamsOf(gr.id)).length < 2 ? '먼저 홈의 "팀 명단"에서 팀을 두 팀 이상 만들어 주세요.' : '아래 단추로 첫 경기를 만들어 보세요.') : '아직 경기가 없습니다.'}</p>`}
 ${teamsOk ? `<button class="btn sm dash" data-act="addGame">+ 경기 추가</button>` : ''}
@@ -568,7 +570,7 @@ function orderScreen() {
 function boardScreen() {
   if (!T().meta) return `<div class="board"><p>${S.loaded ? '대회를 찾을 수 없습니다.' : '불러오는 중입니다.'}</p></div>`;
   const all = gradeList().flatMap((g) => gamesOf(g.id));
-  const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px"><a class="pick row" href="${BASE}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}`)}</div></div></div>`;
+  const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px"><a class="pick row" href="${HOME}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div></div></div>`;
   const d = T().display;
   if (d && d.mode === 'records' && (T().grades || {})[d.gid]) {
     S.gid = d.gid;
@@ -626,13 +628,13 @@ function sheetHtml() {
   }
   if (s.type === 'notice') return `<div class="sheet" role="alertdialog" aria-label="안내"><h2>${esc(s.title)}</h2><p class="note" style="font-size:14px">${esc(s.text)}</p><button class="btn primary big" data-act="closeSheet">확인</button></div>`;
   if (s.type === 'confirm') return `<div class="sheet" role="dialog"><h2>${esc(s.title)}</h2>${s.text ? `<p class="note" style="font-size:14px">${esc(s.text)}</p>` : ''}<button class="btn primary big" ${s.danger ? 'style="background:#B42318;border-color:#B42318"' : ''} data-act="confirmYes">${esc(s.yes)}</button>${close}</div>`;
-  if (s.type === 'qr') return `<div class="sheet" role="dialog" aria-label="학생용 QR"><h2>학생용 화면 QR</h2><div class="qr" style="width:min(100%,360px);aspect-ratio:1;align-self:center;border:1px solid var(--line)">${qrSvg(`${BASE}?v=${S.tid}`)}</div><button class="btn" data-act="copy" data-text="${BASE}?v=${S.tid}" data-msg="학생용 주소를 복사했습니다.">학생용 주소 복사</button>${close.replace('취소', '닫기')}</div>`;
+  if (s.type === 'qr') return `<div class="sheet" role="dialog" aria-label="학생용 QR"><h2>학생용 화면 QR</h2><div class="qr" style="width:min(100%,360px);aspect-ratio:1;align-self:center;border:1px solid var(--line)">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div><button class="btn" data-act="copy" data-text="${BASE}?v=${S.tid}${DQ}" data-msg="학생용 주소를 복사했습니다.">학생용 주소 복사</button>${close.replace('취소', '닫기')}</div>`;
   if (s.type === 'dp') {
     const g = gameOf(s.id); if (!g) return '';
     const P = Object.fromEntries(playersOf(g[L.attacker(g)]).map((p) => [p.pid, p]));
     return `<div class="sheet" role="dialog" aria-label="병살 주자 고르기"><div><div class="label">병살</div><h2>타자와 함께 아웃되는 주자는?</h2></div>${[1, 2, 3].filter((b) => g.bases[`b${b}`]).map((b) => { const p = P[g.bases[`b${b}`]]; return `<button class="pl" style="height:56px;border-color:var(--ink);font-weight:700" data-act="batDp" data-base="${b}"><b>${b}루</b>${p ? `${esc(p.no)} ${esc(p.name)}` : '주자'}</button>`; }).join('')}${close}</div>`;
   }
-  if (s.type === 'orderQR') { const url = `${BASE}?o=${S.tid}&g=${s.id}`; return `<div class="sheet" role="dialog" aria-label="타순 제출 QR"><h2>타순 제출 QR</h2><p class="note" style="font-size:14px">학생이 QR로 들어와 우리 팀을 고르고 타순을 냅니다. 경기를 시작하면 낸 타순대로 선발과 타순이 정해지고, 시작한 뒤에는 바꿀 수 없습니다.</p><div class="qr" style="width:min(100%,320px);aspect-ratio:1;align-self:center;border:1px solid var(--line)">${qrSvg(url)}</div><button class="btn" data-act="copy" data-text="${url}" data-msg="타순 제출 주소를 복사했습니다.">타순 제출 주소 복사</button>${close.replace('취소', '닫기')}</div>`; }
+  if (s.type === 'orderQR') { const url = `${BASE}?o=${S.tid}&g=${s.id}${DQ}`; return `<div class="sheet" role="dialog" aria-label="타순 제출 QR"><h2>타순 제출 QR</h2><p class="note" style="font-size:14px">학생이 QR로 들어와 우리 팀을 고르고 타순을 냅니다. 경기를 시작하면 낸 타순대로 선발과 타순이 정해지고, 시작한 뒤에는 바꿀 수 없습니다.</p><div class="qr" style="width:min(100%,320px);aspect-ratio:1;align-self:center;border:1px solid var(--line)">${qrSvg(url)}</div><button class="btn" data-act="copy" data-text="${url}" data-msg="타순 제출 주소를 복사했습니다.">타순 제출 주소 복사</button>${close.replace('취소', '닫기')}</div>`; }
   if (s.type === 'grade') return `<div class="sheet" role="dialog"><h2>학년 추가</h2><div class="field"><label class="label" for="ng-label">학년 이름</label><input id="ng-label" class="input" placeholder="예: 6학년" maxlength="12" data-enter="saveGrade"></div>
 <div class="field"><label class="label" for="ng-sport">종목</label><select id="ng-sport" class="input">${Object.entries(L.SPORTS).map(([k, sp]) => `<option value="${k}">${sp.name}</option>`).join('')}</select></div><p class="note">종목 기본 규칙이 채워지고, 설정에서 바꿀 수 있습니다.</p><button class="btn primary big" data-act="saveGrade">추가</button>${close}</div>`;
   if (s.type === 'team') return `<div class="sheet" role="dialog"><h2>팀 추가</h2><div class="field"><label class="label" for="nt-name">팀 이름</label><input id="nt-name" class="input" placeholder="예: 6-1 번개" maxlength="20" data-enter="saveTeam"></div><button class="btn primary big" data-act="saveTeam">추가</button>${close}</div>`;
@@ -691,7 +693,7 @@ const val = (id) => { const el = document.getElementById(id); return el ? el.val
 function closeT() { S.off.forEach((f) => f()); S.off = []; S.T = null; S.M = {}; S.loaded = false; S.code = ''; }
 function openT(tid) {
   closeT(); S.tid = tid; S.gid = null; S.teamId = null;
-  if (MODE === 'teacher') localStorage.setItem('whistle-tid', tid);
+  if (MODE === 'teacher') localStorage.setItem(TID_KEY, tid);
   S.off.push(S.store.on(`t/${tid}`, (v) => { S.T = v; S.loaded = true; if (MODE === 'teacher' && S.T && isOwner() && !S.code) loadCode(); render(); }));
   if (MODE === 'teacher') S.off.push(S.store.on(`m/${tid}`, (v) => { S.M = v || {}; render(); }));
 }
@@ -728,7 +730,7 @@ async function afterAuth() {
     try { await loadMy(); } catch (e) { S.my = []; toast(friendly(e)); }
     const join = params.get('join');
     if (join) { S.code = join.toUpperCase(); history.replaceState(null, '', BASE); await actions.joinT(); }
-    const last = localStorage.getItem('whistle-tid');
+    const last = localStorage.getItem(TID_KEY);
     if (!S.tid && last && S.my.some((t) => t.tid === last)) openT(last);
   }
   render(true);
@@ -739,7 +741,7 @@ const gradePath = () => `t/${S.tid}/grades/${grade().id}`;
 const teamPath = () => `t/${S.tid}/teams/${S.teamId}`;
 const actions = {
   async signIn() { try { await S.store.signIn(); } catch (e) { toast('로그인하지 못했습니다.'); } },
-  async signOut() { localStorage.removeItem('whistle-tid'); await S.store.signOut(); },
+  async signOut() { localStorage.removeItem(TID_KEY); await S.store.signOut(); },
   demoOn() { forceDemo(true); },
   demoOff() { forceDemo(false); },
   async newT() {
@@ -770,7 +772,7 @@ const actions = {
     } catch (e) { toast('참여하지 못했습니다. 코드를 다시 확인해 주세요.'); }
   },
   openT(d) { location.hash = 'home'; openT(d.tid); render(true); },
-  async leaveT() { localStorage.removeItem('whistle-tid'); closeT(); S.tid = null; await loadMy(); render(true); },
+  async leaveT() { localStorage.removeItem(TID_KEY); closeT(); S.tid = null; await loadMy(); render(true); },
   async quitT() {
     await S.store.remove(`m/${S.tid}/${uid()}`); await S.store.remove(`u/${uid()}/t/${S.tid}`);
     await actions.leaveT();

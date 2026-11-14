@@ -5,14 +5,17 @@ import { pollStore, pulseKeys } from './poll.js';
 
 // apiKey 와 databaseURL 이 모두 있어야 파이어베이스로 연결한다.
 // 로그인 화면에서 "미리보기로 둘러보기"를 누르면 이 기기에서만 미리보기로 연다.
+// 주소에 ?demo 가 붙으면 지어낸 대회가 채워진 체험용 미리보기로 연다. 평소 쓰던 자료와 따로 둔다.
+export const TRY = new URLSearchParams(location.search).has('demo');
 const FORCE_KEY = 'whistle-force-demo';
-export const forceDemo = (on) => { if (on) localStorage.setItem(FORCE_KEY, '1'); else localStorage.removeItem(FORCE_KEY); location.reload(); };
+export const forceDemo = (on) => { if (TRY) { location.href = location.origin + location.pathname; return; } if (on) localStorage.setItem(FORCE_KEY, '1'); else localStorage.removeItem(FORCE_KEY); location.reload(); };
 export const CONFIGURED = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
-export const DEMO = !CONFIGURED || localStorage.getItem(FORCE_KEY) === '1';
+export const DEMO = TRY || !CONFIGURED || localStorage.getItem(FORCE_KEY) === '1';
 const FIREBASE_VERSION = '10.12.2';
 
 // 학생 화면(mode 'student')은 실시간 연결 없이 몇 초마다 읽기만 한다(poll.js).
 export function createStore(mode) {
+  if (TRY) return import('./demo-seed.js').then((m) => { seedTry(m); return localStore(); });
   if (DEMO) return localStore();
   if (mode === 'student') {
     const root = String(FIREBASE_CONFIG.databaseURL).replace(/\/+$/, '');
@@ -39,8 +42,22 @@ function prune(v) {
 let seq = 0;
 const randomId = () => `${Date.now().toString(36)}${(seq++).toString(36).padStart(2, '0')}${Math.random().toString(36).slice(2, 8)}`;
 
+// 체험용 자료 채우기. 처음 열거나 12시간이 지났으면 새로 채우고, 진행 중인 경기가 방금 시작한 것처럼 시간을 지금에 맞춘다.
+const TRY_KEY = 'whistle-try-v1', TRY_USER = 'whistle-try-user', TRY_AT = 'whistle-try-at';
+export const TID_KEY = TRY ? 'whistle-try-tid' : 'whistle-tid';
+function seedTry({ SEED, SEED_TID, SEED_AT }) {
+  const at = Number(localStorage.getItem(TRY_AT)) || 0;
+  if (localStorage.getItem(TRY_KEY) && Date.now() - at < 12 * 3600 * 1000) return;
+  const d = Date.now() - SEED_AT;
+  const shift = (v) => (typeof v === 'number' && v > 1.5e12 && v < 3e12 ? v + d : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v);
+  localStorage.setItem(TRY_KEY, JSON.stringify(shift(SEED)));
+  localStorage.setItem(TRY_AT, String(Date.now()));
+  localStorage.setItem(TRY_USER, '1');
+  localStorage.setItem(TID_KEY, SEED_TID);
+}
+
 function localStore() {
-  const KEY = 'whistle-demo-v1', USER_KEY = 'whistle-demo-user';
+  const KEY = TRY ? TRY_KEY : 'whistle-demo-v1', USER_KEY = TRY ? TRY_USER : 'whistle-demo-user';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   let root = load();
   let user = localStorage.getItem(USER_KEY) ? { uid: 'demo', name: '나' } : null;
@@ -58,7 +75,7 @@ function localStore() {
   window.addEventListener('storage', (e) => { if (e.key === KEY) { root = load(); fire(); } });
 
   return {
-    demo: true,
+    demo: true, try: TRY,
     get user() { return user; },
     onAuth(cb) { authSubs.add(cb); },
     async signIn() { localStorage.setItem(USER_KEY, '1'); user = { uid: 'demo', name: '나' }; authSubs.forEach((cb) => cb(user)); },

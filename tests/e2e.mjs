@@ -582,6 +582,27 @@ try {
     assert.ok(m.width > 380 && m.height < 70, '폰에서는 메뉴가 아래 가로로 있어야 함');
   });
 
+  await step('체험용 미리보기(?demo): 지어낸 대회가 채워져 있고 평소 자료와 따로 저장', async () => {
+    const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await c2.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    const d = await c2.newPage(); watch(d, '체험');
+    await d.goto(`${base}?demo`);
+    await d.waitForSelector('text=대회 목록');
+    assert.match(await d.locator('#app').innerText(), /지어낸 대회[\s\S]*햇살초 스포츠클럽 리그/);
+    await d.goto(`${base}?demo#games`);
+    await d.waitForSelector('text=학생용 화면 QR');
+    assert.match(await d.locator('#app').innerText(), /2 : 1[\s\S]*진행 중/);
+    assert.match(await d.locator('a.btn', { hasText: '전광판 모드' }).getAttribute('href'), /\?b=.+&demo$/);
+    const keys = await d.evaluate(() => Object.keys(localStorage));
+    assert.ok(keys.length && keys.every((k) => k.startsWith('whistle-try-')), '평소 자료 자리를 건드리지 않아야 함');
+    const tid2 = await d.evaluate(() => localStorage.getItem('whistle-try-tid'));
+    const s2 = await c2.newPage(); watch(s2, '체험 학생');
+    await s2.goto(`${base}?v=${tid2}&demo`);
+    await s2.waitForSelector('text=학생용 · 보기 전용');
+    assert.match(await s2.locator('#app').innerText(), /1 : 1/);
+    await c2.close();
+  });
+
   assert.deepEqual(errors, [], '화면 오류가 없어야 함');
   console.log(`전체 시험 통과: ${steps.length}단계\n- ${steps.join('\n- ')}`);
 } catch (e) {
