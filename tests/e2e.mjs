@@ -318,6 +318,8 @@ try {
     await t.waitForSelector('text=3명');
     await btn(t, '타석 기록').click();
     await t.waitForSelector('text=전원 타격제');
+    await t.getByRole('button', { name: '최대 진루 줄이기' }).click();
+    await t.waitForSelector('text=2루');
     await t.goto(`${base}#teams`);
     await addTeam('티볼 가', ['1 가람', '2 나래', '3 다온']);
     await addTeam('티볼 나', ['1 라온', '2 마루', '3 바다']);
@@ -326,6 +328,8 @@ try {
     await t.waitForSelector('text=지금 타자 · 1번');
     assert.equal(await t.locator('[data-batter]').innerText(), '1 가람');
     assert.equal(await t.locator('[data-act="gPlus"]').count(), 0, '타석 기록에서는 득점 단추가 없어야 함');
+    assert.equal(await btn(t, '3루타').count(), 0, '최대 진루가 2루면 3루타 단추가 없어야 함');
+    assert.match(await text(t), /홈런이 아니면 2루까지/);
     await btn(t, '1루타').click();
     await t.waitForFunction(() => document.querySelector('[data-batter]').textContent === '2 나래');
     assert.match(await text(t), /1루\s*1 가람/);
@@ -360,6 +364,10 @@ try {
   });
 
   await step('타순 제출: 학생이 QR 주소로 타순을 내면 그 순서대로 경기가 시작됨', async () => {
+    await t.goto(`${base}#teams`);
+    await t.getByRole('button', { name: '티볼 가', exact: true }).click();
+    await t.fill('#p-name', '라라'); await btn(t, '추가').click();
+    await t.waitForSelector('text=선수 4명 · 선발 3 / 교체 1');
     await addGameAndOpen();
     await t.waitForSelector('text=타순을 아직 안 냄');
     const gid = (await t.evaluate(() => location.hash)).split('/')[1];
@@ -371,10 +379,18 @@ try {
     await o.getByRole('button', { name: '티볼 가' }).click();
     assert.ok(await o.getByRole('button', { name: /타순 제출 \(0명\)/ }).isDisabled());
     for (const name of ['다온', '가람']) await o.getByRole('button', { name: new RegExp(name) }).click();
+    assert.ok(await o.getByRole('button', { name: '타순 제출 (2명 · 교체 2명)' }).count());
+    for (const name of ['라라', '나래']) await o.getByRole('button', { name: new RegExp(name) }).click();
+    assert.match(await o.getByRole('button', { name: /라라/ }).innerText(), /3번/);
+    assert.match(await o.getByRole('button', { name: /나래/ }).innerText(), /교체/, '선발 인원(3명)을 넘겨 누른 선수는 교체 멤버');
+    await o.getByRole('button', { name: /라라/ }).click();
+    assert.match(await o.getByRole('button', { name: /나래/ }).innerText(), /3번/, '앞 선수가 빠지면 교체가 타순으로 올라옴');
+    await o.getByRole('button', { name: /라라/ }).click();
     await shot(o, '16-order');
-    await o.getByRole('button', { name: '타순 제출 (2명)' }).click();
+    await o.getByRole('button', { name: '타순 제출 (3명 · 교체 1명)' }).click();
     await o.waitForSelector('text=타순을 냈습니다');
-    await t.waitForFunction(() => /받은 타순\s*1번 3 다온\s*2번 1 가람\s*교체\s*2 나래/.test(document.querySelector('#app').innerText));
+    assert.match(await o.locator('#app').innerText(), /교체 멤버\s*4 라라/);
+    await t.waitForFunction(() => /받은 타순\s*1번 3 다온\s*2번 1 가람\s*3번 2 나래\s*교체\s*4 라라/.test(document.querySelector('#app').innerText));
     await btn(t, '경기 시작').click();
     await t.waitForSelector('text=지금 타자 · 1번');
     assert.equal(await t.locator('[data-batter]').innerText(), '3 다온');

@@ -27,7 +27,8 @@ export function gradeFromSport(sport, label) {
     minutes: p.minutes || 10, sets: p.sets || 3, setPoints: p.setPoints || 25, innings: p.innings || 3,
     starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
-    detail: false, rotate: 'all',
+    // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
+    detail: false, rotate: 'all', maxAdv: 3,
   };
 }
 
@@ -304,6 +305,7 @@ export const isDetail = (g, grade) => grade.format === 'innings' && !!g.detail;
 const HIT = { h1: 1, h2: 2, h3: 3, hr: 4 };
 export const RESULT_NAMES = { h1: '1루타', h2: '2루타', h3: '3루타', hr: '홈런', go: '땅볼 아웃', fo: '플라이 아웃', dp: '병살', e: '출루' };
 // e(출루)는 안타는 아니지만 타자가 1루에 나간 경우다. 수업용이라 실책이라는 말은 기록에 남기지 않는다.
+export const maxAdv = (grade) => Math.min(3, Math.max(1, Number(grade.maxAdv) || 3));
 export const batterOf = (g) => { const side = attacker(g), order = (g.order || {})[side] || []; return order.length ? order[g.bat[side] % order.length] : ''; };
 const snap = (g) => JSON.stringify({ pa: g.pa, pb: g.pb, sa: g.sa, sb: g.sb, bases: g.bases, outs: g.outs, hb: g.hb, bat: g.bat, lb: g.lb || '', halfDone: !!g.halfDone });
 const keepUndo = (g, ctx) => { g.undo = { op: ctx.op || '', cur: g.cur, half: g.half, s: snap(g) }; };
@@ -318,6 +320,7 @@ export function bat(g, grade, ctx, res) {
   norm(g, grade); live(g); detailOnly(g, grade);
   if (g.halfDone) throw new Error('이번 공격이 끝났습니다. "공수 교대"를 눌러 주세요.');
   if (!(res in RESULT_NAMES)) throw new Error('알 수 없는 타석 결과입니다.');
+  if (res in HIT && res !== 'hr' && HIT[res] > maxAdv(grade)) throw new Error(`이 학년은 홈런이 아니면 ${maxAdv(grade)}루까지만 갈 수 있습니다.`);
   const side = attacker(g), pid = batterOf(g), arr = side === 'a' ? g.pa : g.pb;
   const firstRunner = [1, 2, 3].find((b) => g.bases[`b${b}`]);
   if (res === 'dp' && !firstRunner) throw new Error('주자가 없으면 병살이 될 수 없습니다.');

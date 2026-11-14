@@ -114,7 +114,7 @@ function batBox(g, gr) {
   return `<section class="card p stack" style="margin:10px 20px 0">
 <div class="row" style="gap:14px">${diamond(g, 132)}<div class="stack grow" style="gap:4px"><span class="label">지금 타자 · ${(g.bat[side] % order.length) + 1}번</span><b style="font-size:20px" data-batter>${g.halfDone ? '-' : nm(L.batterOf(g))}</b><span class="note">${outsText(g, gr)}</span></div></div>
 ${g.halfDone ? `<b>${gr.rotate === 'out3' ? '3아웃입니다.' : '타자가 모두 쳤습니다.'} 주자 정리가 끝났으면 "공수 교대"를 눌러 주세요.</b>` : ''}
-<span class="label">안타</span><div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">${rb('h1', 'primary')}${rb('h2', 'primary')}${rb('h3', 'primary')}${rb('hr', 'primary')}</div>
+<span class="label">안타${L.maxAdv(gr) < 3 ? ` · 홈런이 아니면 ${L.maxAdv(gr)}루까지` : ''}</span><div class="grid2" style="grid-template-columns:repeat(${L.maxAdv(gr) + 1},minmax(0,1fr));gap:6px">${['h1', 'h2', 'h3'].slice(0, L.maxAdv(gr)).map((r) => rb(r, 'primary')).join('')}${rb('hr', 'primary')}</div>
 <span class="label">아웃 · 그 밖의 출루</span><div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">${rb('go', '')}${rb('fo', '')}${rb('dp', '')}${rb('e', '')}</div>
 ${runners ? `<div class="stack" style="gap:6px;border-top:1px solid var(--soft);padding-top:10px"><span class="label">주자 · 실제와 다르면 고쳐 주세요</span>${runners}</div>` : ''}
 <button class="btn plain" data-act="batUndo" data-id="${g.id}"${canUndo ? '' : ' disabled'}>방금 기록 취소</button></section>`;
@@ -255,7 +255,7 @@ function gameScreen(id) {
     const anySent = inn && (orderList(id, 'a', g).length || orderList(id, 'b', g).length);
     const ros = (side) => (inn && orderList(id, side, g).length ? sentRos(side) : rosPlain(side));
     const rosPlain = (side) => `<div class="card lineup ${side}"><b class="t${side}">${esc(teamName(g[side]))}</b>${inn ? '<span class="small muted">타순을 아직 안 냄 · 선발이 번호 순으로 섭니다</span>' : ''}<span class="label">선발</span>${playersOf(g[side]).filter((p) => !p.bench).map((p) => `<span><b>${esc(p.no)}</b> ${esc(p.name)}</span>`).join('') || '<span class="muted">없음</span>'}<span class="label">교체</span>${playersOf(g[side]).filter((p) => p.bench).map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)}</span>`).join('') || '<span class="muted">없음</span>'}</div>`;
-    return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col"><section class="dark stack center" style="margin:0 20px"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))} · ${L.FORMAT_NAMES[gr.format]}</span><div style="font-size:22px;font-weight:900"><span class="ta">${esc(teamName(g.a))}</span> vs <span class="tb">${esc(teamName(g.b))}</span></div>${L.whenText(g) ? `<b>${esc(L.whenText(g))}</b>` : ''}<button class="btn big white block" data-act="gStart" data-id="${id}">경기 시작</button><span class="note">시작하면 지금 팀 명단의 선발·교체가 이 경기에 적용됩니다.${inn ? ' 타순을 낸 팀은 낸 타순대로 섭니다.' : ''}</span>${inn ? `<button class="btn sm block" data-act="orderQR" data-id="${id}">타순 제출 QR 띄우기</button>` : ''}</section>${isOwner() ? `<div class="grid2" style="margin:12px 20px 0"><button class="btn sm" data-act="whenAsk" data-id="${id}">일정 ${L.whenText(g) ? '바꾸기' : '넣기'}</button><button class="btn sm plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>${anySent ? `<div class="center"><button class="btn plain" data-act="orderClear" data-id="${id}">받은 타순 지우기</button></div>` : ''}` : ''}</div>
+    return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col"><section class="dark stack center" style="margin:0 20px"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))} · ${L.FORMAT_NAMES[gr.format]}</span><div style="font-size:22px;font-weight:900"><span class="ta">${esc(teamName(g.a))}</span> vs <span class="tb">${esc(teamName(g.b))}</span></div>${L.whenText(g) ? `<b>${esc(L.whenText(g))}</b>` : ''}<button class="btn big white block" data-act="gStart" data-id="${id}">경기 시작</button><span class="note">시작하면 지금 팀 명단의 선발·교체가 이 경기에 적용됩니다.${inn ? ' 타순을 낸 팀은 낸 타순대로 섭니다.' : ''}</span>${inn ? `<button class="btn sm block" data-act="orderQR" data-id="${id}">타순 제출 QR 띄우기</button><span class="note">기록 방식: ${gr.detail ? `타석 기록 (${gr.rotate === 'out3' ? '3아웃제' : '전원 타격제'})` : '점수만 · 타석마다 안타·아웃을 기록하려면 시작하기 전에 "종목·규칙"에서 타석 기록으로 바꿔 주세요'}</span>` : ''}</section>${isOwner() ? `<div class="grid2" style="margin:12px 20px 0"><button class="btn sm" data-act="whenAsk" data-id="${id}">일정 ${L.whenText(g) ? '바꾸기' : '넣기'}</button><button class="btn sm plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>${anySent ? `<div class="center"><button class="btn plain" data-act="orderClear" data-id="${id}">받은 타순 지우기</button></div>` : ''}` : ''}</div>
 <div class="col"><section class="grid2" style="margin:12px 20px 0">${ros('a')}${ros('b')}</section></div></div>${nav('games')}</div>`;
   }
   const liveNow = g.status === 'live';
@@ -346,7 +346,8 @@ ${f === 'sets' || f === 'dodge' ? `<div class="set"><span>세트 수</span>${ste
 ${f === 'sets' ? `<div class="set"><span>세트 점수</span>${stepper('setPoints', gr.setPoints, '점', 5, 50, '세트 점수')}</div>` : ''}
 ${f === 'innings' ? `<div class="set"><span>이닝 수</span>${stepper('innings', gr.innings, '회', 1, 9, '이닝 수')}</div>
 <div class="set"><span>기록 방식</span>${seg('detail', gr.detail ? 1 : 0, [[0, '점수만'], [1, '타석 기록']])}</div>
-${gr.detail ? `<div class="set"><span>공수 교대</span>${seg('rotate', gr.rotate || 'all', [['all', '전원 타격제'], ['out3', '3아웃제']])}</div>` : ''}` : ''}
+${gr.detail ? `<div class="set"><span>공수 교대</span>${seg('rotate', gr.rotate || 'all', [['all', '전원 타격제'], ['out3', '3아웃제']])}</div>
+<div class="set"><span>최대 진루 <span class="muted">(홈런 제외)</span></span>${stepper('maxAdv', L.maxAdv(gr), '루', 1, 3, '최대 진루')}</div>` : ''}` : ''}
 <div class="set"><span>선발 인원</span>${stepper('starters', gr.starters, '명', 1, 30, '선발 인원')}</div>
 <div class="set"><span>교체 카드 <span class="muted">(팀마다 · 0은 제한 없음)</span></span>${stepper('cards', gr.cards, '장', 0, 20, '교체 카드')}</div>
 <div class="set"><span>나간 선수 다시 들어가기</span>${seg('reentry', gr.reentry ? 1 : 0, [[1, '허용'], [0, '금지']])}</div>
@@ -474,12 +475,15 @@ function orderScreen() {
   const O = S.ord;
   if (!O.side) return wrap(`${head}<div class="pad stack"><p class="note" style="font-size:14px">우리 팀을 고르세요.</p>${['a', 'b'].map((side) => `<button class="btn big ${side === 'a' ? 'blue' : 'orange'}" data-act="ordSide" data-side="${side}">${esc(teamName(g[side]))}${orderList(g.id, side, g).length ? ' · 제출됨' : ''}</button>`).join('')}</div>`);
   const ps = playersOf(g[O.side]), P = Object.fromEntries(ps.map((p) => [p.pid, p]));
-  if (O.done) return wrap(`${head}<div class="pad stack"><section class="dark stack"><b style="font-size:18px">${esc(teamName(g[O.side]))} 타순을 냈습니다</b>${O.picks.map((pid, i) => `<span><b>${i + 1}번</b> ${esc(P[pid].no)} ${esc(P[pid].name)}</span>`).join('')}</section><p class="note">경기가 시작되기 전까지는 다시 고쳐서 낼 수 있습니다.</p><button class="btn" data-act="ordTog" data-pid="">다시 고치기</button></div>`);
+  // 선발 인원까지만 타순이 되고, 그 뒤에 누른 선수와 안 누른 선수는 교체 멤버가 된다.
+  const N = Math.max(1, Number(T().grades[g.gid].starters) || 1);
+  const lineupPicks = O.picks.slice(0, N), benchCount = ps.length - lineupPicks.length;
+  if (O.done) return wrap(`${head}<div class="pad stack"><section class="dark stack"><b style="font-size:18px">${esc(teamName(g[O.side]))} 타순을 냈습니다</b>${lineupPicks.map((pid, i) => `<span><b>${i + 1}번</b> ${esc(P[pid].no)} ${esc(P[pid].name)}</span>`).join('')}${benchCount ? `<span class="label" style="border-top:1px solid #39424F;padding-top:8px">교체 멤버</span><span class="muted">${ps.filter((p) => !lineupPicks.includes(p.pid)).map((p) => `${esc(p.no)} ${esc(p.name)}`).join(' · ')}</span>` : ''}</section><p class="note">경기가 시작되기 전까지는 다시 고쳐서 낼 수 있습니다.</p><button class="btn" data-act="ordTog" data-pid="">다시 고치기</button></div>`);
   return wrap(`${head}<div class="pad stack"><div class="row between"><b class="t${O.side}" style="font-size:17px">${esc(teamName(g[O.side]))}</b><button class="btn plain" style="height:44px;padding:0" data-act="ordBack">다른 팀 고르기</button></div>
-<p class="note" style="font-size:14px">타석에 설 순서대로 이름을 누르세요. 다시 누르면 빠집니다. 누른 선수만 선발이 됩니다.</p>
-<div class="grid2" style="gap:8px">${ps.map((p) => { const i = O.picks.indexOf(p.pid); return `<button class="pl${i >= 0 ? ' on' : ''}" data-act="ordTog" data-pid="${p.pid}" aria-pressed="${i >= 0}">${i >= 0 ? `<span class="tagbox" style="background:#fff;color:var(--ink);margin-right:8px">${i + 1}번</span>` : `<b>${esc(p.no)}</b>`}${esc(p.name)}</button>`; }).join('') || '<p class="note">팀 명단이 아직 없습니다. 선생님께 알려 주세요.</p>'}</div>
+<p class="note" style="font-size:14px">타석에 설 순서대로 이름을 누르세요. 다시 누르면 빠집니다. 선발은 ${N}명이라, ${N}명을 누른 뒤에 누르는 선수와 누르지 않은 선수는 교체 멤버가 됩니다.</p>
+<div class="grid2" style="gap:8px">${ps.map((p) => { const i = O.picks.indexOf(p.pid); return `<button class="pl${i >= 0 ? ' on' : ''}" data-act="ordTog" data-pid="${p.pid}" aria-pressed="${i >= 0}">${i >= N ? `<span class="tagbox" style="background:var(--accent);color:var(--ink);margin-right:8px">교체</span>` : i >= 0 ? `<span class="tagbox" style="background:#fff;color:var(--ink);margin-right:8px">${i + 1}번</span>` : `<b>${esc(p.no)}</b>`}${esc(p.name)}</button>`; }).join('') || '<p class="note">팀 명단이 아직 없습니다. 선생님께 알려 주세요.</p>'}</div>
 <div class="grid2"><button class="btn sm" data-act="ordAll">번호 순으로 모두</button><button class="btn sm" data-act="ordNone">모두 지우기</button></div>
-<button class="btn primary big" data-act="ordSend"${O.picks.length ? '' : ' disabled'}>타순 제출 (${O.picks.length}명)</button></div><div class="spacer"></div><div class="foot">음악적체육인</div>`);
+<button class="btn primary big" data-act="ordSend"${O.picks.length ? '' : ' disabled'}>타순 제출 (${lineupPicks.length}명${lineupPicks.length && benchCount ? ` · 교체 ${benchCount}명` : ''})</button></div><div class="spacer"></div><div class="foot">음악적체육인</div>`);
 }
 
 // ---------- 전광판 ----------
@@ -704,7 +708,7 @@ const actions = {
   ordBack() { S.ord = { side: null, picks: [], done: false }; render(true); },
   async ordSend() {
     if (!S.ord.picks.length) return toast('타순에 넣을 선수를 눌러 주세요.');
-    await S.store.set(`t/${S.tid}/orders/${params.get('g')}/${S.ord.side}`, { list: S.ord.picks, at: S.store.now() });
+    await S.store.set(`t/${S.tid}/orders/${params.get('g')}/${S.ord.side}`, { list: S.ord.picks.slice(0, Math.max(1, Number(T().grades[gameOf(params.get('g')).gid].starters) || 1)), at: S.store.now() });
     S.ord.done = true; render(true);
   },
   async saveWhen() { await S.store.update(`t/${S.tid}/games/${S.sheet.id}`, readWhen()); S.sheet = null; render(true); },

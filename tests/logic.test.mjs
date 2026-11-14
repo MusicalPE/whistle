@@ -326,3 +326,13 @@ test('티볼: 미리 받은 타순대로 선발과 타순이 정해진다', () =
   L.start(g2, L.gradeFromSport('futsal', '6학년'), ctxAt(0, { rosters, orders: { a: { list: ['p4'] } } }));
   assert.equal(g2.lineup.a.p4, 'bench', '이닝제가 아니면 타순 제출을 쓰지 않음');
 });
+
+test('티볼: 최대 진루 수를 2로 두면 3루타는 못 누르고 홈런은 된다', () => {
+  const { grade, g, c } = teeGame({ maxAdv: 2 }, 5);
+  assert.equal(L.maxAdv(grade), 2);
+  assert.throws(() => L.bat(g, grade, c(1), 'h3'), /2루까지만/);
+  L.bat(g, grade, c(1, 'o1'), 'h2');
+  L.bat(g, grade, c(2, 'o2'), 'hr');
+  assert.equal(g.sa, 2);
+  assert.equal(L.maxAdv({}), 3);
+});
