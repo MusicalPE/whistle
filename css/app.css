@@ -70,7 +70,8 @@ h1, h2, p { margin: 0; }
 .chips .chip { flex: 0 0 auto; padding: 0 14px; }
 
 .submenu { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 10px 20px 0; padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
-.submenu .label { margin-right: auto; }
+.submenu .label { margin-right: 6px; }
+.submenu .del { margin-left: auto; height: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--sub); font-size: 13px; font-weight: 700; text-decoration: underline; }
 .submenu a { height: 44px; padding: 0 12px; display: inline-flex; align-items: center; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--ink); text-decoration: none; border: 1px solid var(--ink); }
 .tcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .tcard { padding: 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; width: 100%; color: var(--ink); }
@@ -204,6 +205,7 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   .btn.primary:not(:disabled):hover, .chip.on:hover, .pl.on:hover { filter: brightness(1.35); }
   a.game:hover, button.game:hover, .tcard:hover { border-color: var(--ink); }
   .submenu a:hover { background: var(--ink); color: #fff; }
+  .submenu .del:hover { color: var(--ink); }
   .tbl button.tr:hover { background: #F0F4FF; }
   .back:hover, .btn.plain:not(:disabled):hover { color: var(--ink); filter: none; }
 }

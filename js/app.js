@@ -211,7 +211,7 @@ function homeScreen() {
 <div class="row between"><h1 class="title grow">${esc(T().meta.name)}</h1><button class="btn sm" style="flex:0 0 auto" data-act="leaveT">대회 목록</button></div>
 <div class="row small muted" style="justify-content:flex-end"><a href="#members" class="bold" style="padding:10px 0">함께하는 선생님 ${Object.keys(S.M || {}).length || 1}명${owner ? ' · 초대' : ''}</a></div></header>
 <div class="chips">${chips}</div>
-${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${owner ? '<a href="#teams">팀 명단</a><a href="#rules">종목·규칙</a>' : ''}<a href="#records">개인 기록</a></div>` : ''}
+${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${owner ? '<a href="#teams">팀 명단</a><a href="#rules">종목·규칙</a>' : ''}<a href="#records">개인 기록</a>${owner ? '<button class="del" data-act="delGradeAsk">학년 지우기</button>' : ''}</div>` : ''}
 <div class="cols"><div class="col"><section class="dark row" style="margin:12px 20px 0;gap:16px"><div class="qr" style="width:96px;height:96px;flex:0 0 96px">${qrSvg(`${BASE}?v=${S.tid}`)}</div>
 <div class="stack grow" style="gap:8px"><b>학생용 화면 QR</b><span class="note">로그인 없이 출전 명단과 점수를 실시간으로 봅니다.</span><button class="btn sm white" style="align-self:flex-start" data-act="showQR">크게 띄우기</button></div></section>
 <div class="grid2" style="margin:10px 20px 0"><a class="btn sm" href="${BASE}?b=${S.tid}">전광판 모드</a><button class="btn sm" data-act="copy" data-text="${BASE}?b=${S.tid}" data-msg="전광판 주소를 복사했습니다.">전광판 주소 복사</button></div></div>

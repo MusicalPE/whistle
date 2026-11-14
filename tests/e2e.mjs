@@ -470,6 +470,16 @@ try {
     assert.match(await text(s), /6-1 번개\s*0\s*0\s*0\s*0\s*0/);
   });
 
+  await step('홈에서 학년 지우기: 그 학년의 팀·경기도 함께 지워짐', async () => {
+    await t.goto(`${base}#home`);
+    await t.getByRole('button', { name: /^1학년/ }).click();
+    await btn(t, '학년 지우기').click();
+    await t.waitForSelector('text=이 학년의 팀, 경기, 기록이 모두 지워집니다');
+    await sbtn(t, '지우기').click();
+    await t.waitForFunction(() => !/1학년 넷볼/.test(document.querySelector('.chips').innerText));
+    assert.match(await t.locator('.chips').innerText(), /6학년 풋살/);
+  });
+
   await step('PC 화면: 메뉴는 왼쪽, 내용은 두 칸', async () => {
     await t.setViewportSize({ width: 1280, height: 800 });
     await t.goto(`${base}#home`);
