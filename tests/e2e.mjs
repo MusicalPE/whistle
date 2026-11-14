@@ -303,6 +303,54 @@ try {
     assert.doesNotMatch(await text(s), /노아린/, '경기 전에 넣은 선수는 끝난 경기의 학생 화면에 나오지 않아야 함');
   });
 
+  await step('티볼 타석 기록: 루 상황, 안타·홈런·아웃, 취소, 전원 타격제 공수 교대, 개인 기록', async () => {
+    await addGrade('티볼반', 'teeball');
+    await t.goto(`${base}#settings`);
+    for (let i = 0; i < 7; i++) await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
+    await t.waitForSelector('text=3명');
+    await btn(t, '타석 기록').click();
+    await t.waitForSelector('text=전원 타격제');
+    await t.goto(`${base}#teams`);
+    await addTeam('티볼 가', ['1 가람', '2 나래', '3 다온']);
+    await addTeam('티볼 나', ['1 라온', '2 마루', '3 바다']);
+    await addGameAndOpen();
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('text=지금 타자 · 1번');
+    assert.equal(await t.locator('[data-batter]').innerText(), '1 가람');
+    assert.equal(await t.locator('[data-act="gPlus"]').count(), 0, '타석 기록에서는 득점 단추가 없어야 함');
+    await btn(t, '1루타').click();
+    await t.waitForFunction(() => document.querySelector('[data-batter]').textContent === '2 나래');
+    assert.match(await text(t), /1루\s*1 가람/);
+    await btn(t, '2루타').click();
+    await t.waitForFunction(() => /3루\s*1 가람[\s\S]*2루\s*2 나래/.test(document.querySelector('#app').innerText));
+    await shot(t, '14-teeball');
+    await btn(t, '홈런').click();
+    await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '3');
+    await t.waitForSelector('text=타자가 모두 쳤습니다');
+    assert.ok(await btn(t, '1루타').isDisabled());
+    await btn(t, '방금 기록 취소').click();
+    await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '0');
+    assert.match(await text(t), /홈런 · 3득점[^\n]*\(취소\)/);
+    await btn(t, '플라이').click();
+    await t.waitForSelector('text=타자가 모두 쳤습니다');
+    await t.getByRole('button', { name: '홈인' }).first().click();
+    await t.waitForFunction(() => document.querySelector('[data-score="a"]').textContent === '1');
+    await s.reload();
+    await s.selectOption('select[data-change="pickGrade"]', { label: '티볼반' });
+    await s.waitForSelector('svg[aria-label^="루 상황"]');
+    assert.match(await text(s), /공격 끝/);
+    await btn(t, '공수 교대').click();
+    await t.waitForSelector('text=1회 말');
+    assert.equal(await t.locator('[data-batter]').innerText(), '1 라온');
+    await btn(t, '땅볼').click(); await btn(t, '출루').click();
+    await t.waitForFunction(() => /1루\s*2 마루/.test(document.querySelector('#app').innerText));
+    assert.doesNotMatch(await text(t), /실책/);
+    await t.goto(`${base}#records`);
+    await t.waitForSelector('text=타점');
+    assert.match(await text(t), /1 가람\s*티볼 가\s*1\s*1\s*0\s*1/);
+    await shot(t, '15-teeball-records');
+  });
+
   await step('경기 일정: 날짜와 교시 넣기, 시간으로 바꾸기, 학생 화면에 보임', async () => {
     await t.goto(`${base}#home`);
     await t.getByRole('button', { name: /^6학년/ }).click();
@@ -346,6 +394,9 @@ try {
     await shot(t, '21-pc-game');
     await t.goto(`${base}#records`); await shot(t, '22-pc-records');
     await t.goto(`${base}#teams`); await shot(t, '23-pc-teams');
+    await t.locator('.navbrand').click();
+    await t.waitForSelector('text=학생용 화면 QR');
+    assert.equal(await t.evaluate(() => location.hash), '#home', '왼쪽 위 이름을 누르면 홈으로');
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);
     const m = await t.locator('.nav').boundingBox();

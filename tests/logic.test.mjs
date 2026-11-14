@@ -230,3 +230,82 @@ test('경기 일정 글씨: 날짜·교시·시간은 모두 선택', () => {
   assert.equal(L.whenText({ period: '점심시간' }), '점심시간');
   assert.equal(L.whenText({ date: '2026-03-02' }), '3월 2일(월)');
 });
+
+const teeGame = (extra = {}, n = 3) => {
+  const grade = { ...L.gradeFromSport('teeball', '4학년'), detail: true, starters: n, ...extra };
+  const g = L.newGame('g4', 1, 'ta', 'tb');
+  const c = (now, op) => ctxAt(now, { rosters: { a: roster(n + 1, n), b: roster(n + 1, n) }, op });
+  L.start(g, grade, c(0));
+  return { grade, g, c };
+};
+
+test('티볼 타석 기록: 타순, 안타만큼 주자 진루, 홈인하면 점수·타점', () => {
+  const { grade, g, c } = teeGame();
+  assert.equal(g.detail, true);
+  assert.deepEqual(g.order.a, ['p1', 'p2', 'p3']);
+  assert.equal(L.batterOf(g), 'p1');
+  let logs = L.bat(g, grade, c(1, 'o1'), 'h1');
+  assert.deepEqual(g.bases, { b1: 'p1', b2: '', b3: '' });
+  assert.match(logs[0].text, /가팀 1 선수1 · 1루타/);
+  L.bat(g, grade, c(2, 'o2'), 'h2');
+  assert.deepEqual(g.bases, { b1: '', b2: 'p2', b3: 'p1' });
+  logs = L.bat(g, grade, c(3, 'o3'), 'hr');
+  assert.deepEqual([g.bases, g.sa, g.pa[0]], [{ b1: '', b2: '', b3: '' }, 3, 3]);
+  assert.deepEqual([logs[0].rbi, logs[0].scored], [3, ['p1', 'p2', 'p3']]);
+  assert.match(logs[0].text, /홈런 · 3득점/);
+  assert.equal(g.halfDone, true, '전원 타격제: 타순이 한 바퀴 돌면 공격 끝');
+  assert.throws(() => L.bat(g, grade, c(4), 'h1'), /공수 교대/);
+  L.nextPart(g, grade, c(5));
+  assert.deepEqual([g.half, g.hb, g.outs, g.halfDone, L.batterOf(g)], [1, 0, 0, false, 'p1']);
+  assert.equal(L.attacker(g), 'b');
+});
+
+test('티볼 타석 기록: 땅볼·플라이 아웃, 병살, 실책 출루, 주자 고치기', () => {
+  const { grade, g, c } = teeGame({ rotate: 'out3' }, 5);
+  assert.throws(() => L.bat(g, grade, c(1), 'dp'), /주자가 없으면/);
+  let logs = L.bat(g, grade, c(1, 'o1'), 'e');
+  assert.deepEqual([g.bases.b1, logs[0].rbi, logs[0].res], ['p1', 0, 'e']);
+  logs = L.runner(g, grade, c(2, 'o2'), 1, 'adv');
+  assert.equal(g.bases.b2, 'p1');
+  assert.match(logs[0].text, /진루 \(1루 → 2루\)/);
+  L.bat(g, grade, c(3, 'o3'), 'h1');
+  assert.deepEqual(g.bases, { b1: 'p2', b2: '', b3: 'p1' });
+  assert.throws(() => L.runner(g, grade, c(4), 2, 'out'), /주자가 없습니다/);
+  logs = L.runner(g, grade, c(4, 'o4'), 3, 'adv');
+  assert.deepEqual([g.sa, logs[0].scored, logs[0].rbiTo], [1, ['p1'], 'p2']);
+  L.bat(g, grade, c(5, 'o5'), 'dp');
+  assert.deepEqual([g.outs, g.bases.b1, g.halfDone], [2, '', false]);
+  L.bat(g, grade, c(6, 'o6'), 'fo');
+  assert.deepEqual([g.outs, g.halfDone], [3, true]);
+  assert.equal(L.RESULT_NAMES.go, '땅볼 아웃');
+});
+
+test('티볼 타석 기록: 방금 기록 취소, 교체하면 타순 자리 이어받기', () => {
+  const { grade, g, c } = teeGame();
+  L.bat(g, grade, c(1, 'o1'), 'h3');
+  L.bat(g, grade, c(2, 'o2'), 'h1');
+  assert.deepEqual([g.sa, g.bases.b1, g.undo.op], [1, 'p2', 'o2']);
+  L.undo(g, grade);
+  assert.deepEqual([g.sa, g.bases, g.hb, L.batterOf(g), g.undo], [0, { b1: '', b2: '', b3: 'p1' }, 1, 'p2', undefined]);
+  assert.throws(() => L.undo(g, grade), /되돌릴 기록/);
+  L.sub(g, grade, c(3), 'a', 'p1', 'p4');
+  assert.deepEqual([g.order.a, g.bases.b3], [['p4', 'p2', 'p3'], 'p4']);
+});
+
+test('티볼 타석 기록: 개인 기록(타석·안타·타점·득점), 선발이 없으면 점수만 방식으로', () => {
+  const { grade, g, c } = teeGame();
+  const teams = { ta: { name: '가팀', players: roster(4, 3) }, tb: { name: '나팀', players: roster(4, 3) } };
+  const logs = { x: {} }; let n = 0; const keep = (list) => list.forEach((l) => { logs.x[`l${n++}`] = JSON.parse(JSON.stringify(l)); });
+  keep(L.bat(g, grade, c(1, 'o1'), 'h2'));
+  keep(L.bat(g, grade, c(2, 'o2'), 'h1'));
+  keep(L.runner(g, grade, c(3, 'o3'), 3, 'home'));
+  keep(L.bat(g, grade, c(4, 'o4'), 'go'));
+  const rec = Object.fromEntries(L.records(teams, [{ id: 'x', ...g }], logs).map((r) => [r.key, r]));
+  assert.deepEqual([rec['ta/p1'].ab, rec['ta/p1'].h, rec['ta/p1'].h2, rec['ta/p1'].goals], [1, 1, 1, 1]);
+  assert.deepEqual([rec['ta/p2'].ab, rec['ta/p2'].h, rec['ta/p2'].rbi, rec['ta/p2'].goals], [1, 1, 1, 0]);
+  assert.deepEqual([rec['ta/p3'].ab, rec['ta/p3'].h], [1, 0]);
+  const g2 = L.newGame('g4', 2, 'ta', 'tb');
+  L.start(g2, grade, ctxAt(0, { rosters: { a: {}, b: {} } }));
+  assert.equal(g2.detail, false);
+  assert.throws(() => L.bat(g2, grade, c(1), 'h1'), /타석 기록을 쓰지 않는/);
+});

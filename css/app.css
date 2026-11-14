@@ -124,7 +124,7 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .nav { margin-top: auto; position: sticky; bottom: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: #fff; border-top: 1px solid var(--line); }
 .nav a { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: var(--sub); text-decoration: none; }
 .nav a.on { font-weight: 700; color: var(--ink); box-shadow: inset 0 3px 0 var(--ink); }
-.navbrand { display: none; }
+.nav a.navbrand { display: none; }
 .colgap { margin-top: 10px; }
 .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--ink); border-radius: 10px; overflow: hidden; }
 .tabs button { height: 44px; border: 0; background: #fff; color: var(--sub); font-size: 14px; font-weight: 500; }
@@ -170,7 +170,10 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   .app { max-width: 560px; }
   .app:has(> .nav) { max-width: 1180px; padding-left: 216px; }
   .nav { position: fixed; top: 0; bottom: 0; left: max(0px, calc(50vw - 590px)); width: 216px; margin-top: 0; display: flex; flex-direction: column; border-top: 0; border-right: 1px solid var(--line); }
-  .navbrand { display: block; padding: 26px 24px 22px; }
+  .nav a.navbrand { display: block; height: auto; padding: 26px 24px 22px; transition: background .15s; }
+  .nav a.navbrand:hover { background: var(--bg); }
+  .nav a.navbrand:hover img { transform: rotate(-8deg) scale(1.06); }
+  .nav a.navbrand img { transition: transform .15s; }
   .nav a { height: 52px; justify-content: flex-start; padding-left: 28px; font-size: 16px; }
   .nav a.on { box-shadow: inset 4px 0 0 var(--ink); background: var(--bg); }
   .app:has(> .nav) .top > .brand { display: none; }
@@ -182,4 +185,14 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   #sheet { justify-content: center; }
   .sheet { border-radius: 18px; }
   #toast { bottom: 32px; }
+}
+
+/* 마우스를 올렸을 때 */
+@media (hover: hover) {
+  .nav a:hover { color: var(--ink); background: var(--bg); }
+  .btn:not(:disabled):hover, .chip:hover, .pl:not(:disabled):hover, .seg button:hover, .tabs button:hover { filter: brightness(.94); }
+  .btn.primary:not(:disabled):hover, .chip.on:hover, .pl.on:hover { filter: brightness(1.35); }
+  a.game:hover, button.game:hover { border-color: var(--ink); }
+  .tbl button.tr:hover { background: #F0F4FF; }
+  .back:hover, .btn.plain:not(:disabled):hover { color: var(--ink); filter: none; }
 }

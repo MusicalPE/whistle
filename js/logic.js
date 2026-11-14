@@ -26,6 +26,8 @@ export function gradeFromSport(sport, label) {
     label, sport: SPORTS[sport] ? sport : 'custom', sportName: '', format: p.format,
     minutes: p.minutes || 10, sets: p.sets || 3, setPoints: p.setPoints || 25, innings: p.innings || 3,
     starters: p.starters, cards: p.cards, reentry: false, steps: p.steps,
+    // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
+    detail: false, rotate: 'all',
   };
 }
 
@@ -66,6 +68,13 @@ export function norm(g, grade) {
   g.remain = { a: 0, b: 0, ...(g.remain || {}) };
   g.r0 = { a: 0, b: 0, ...(g.r0 || {}) };
   g.cur = g.cur || 0; g.half = g.half || 0; g.sa = g.sa || 0; g.sb = g.sb || 0;
+  if (grade.format === 'innings') {
+    g.bases = { b1: '', b2: '', b3: '', ...(g.bases || {}) };
+    g.outs = g.outs || 0; g.hb = g.hb || 0;
+    g.bat = { a: 0, b: 0, ...(g.bat || {}) };
+    const list = (v) => (Array.isArray(v) ? v : Object.values(v || {}));
+    g.order = { a: list((g.order || {}).a), b: list((g.order || {}).b) };
+  }
   return g;
 }
 
@@ -122,6 +131,14 @@ export function start(g, grade, ctx) {
     g.remain[side] = g.r0[side];
   }
   g.status = 'live'; g.startedAt = ctx.now; g.cur = 0; g.half = 0;
+  if (grade.format === 'innings') {
+    // 타순은 선발 선수의 번호 순. 두 팀 모두 선발이 있어야 타석 기록을 쓸 수 있다.
+    for (const side of ['a', 'b']) {
+      const roster = (ctx.rosters || {})[side] || {};
+      g.order[side] = Object.keys(g.lineup[side]).filter((pid) => g.lineup[side][pid] === 'on').sort((x, y) => (Number(roster[x].no) || 0) - (Number(roster[y].no) || 0) || String(roster[x].name).localeCompare(String(roster[y].name), 'ko'));
+    }
+    g.detail = !!grade.detail && g.order.a.length > 0 && g.order.b.length > 0;
+  }
   if (hasClock(grade)) g.clock = { run: true, left: partMs(grade), at: ctx.now };
   return [mk(g, grade, ctx, 'info', '경기 시작')];
 }
@@ -192,6 +209,7 @@ export function nextPart(g, grade, ctx) {
   }
   if (grade.format === 'innings') {
     const logs = [mk(g, grade, ctx, 'info', `${partName(grade, g.cur, g.half)} 끝 · 공수 교대`)];
+    g.bases = { b1: '', b2: '', b3: '' }; g.outs = 0; g.hb = 0; g.halfDone = false; g.lb = ''; delete g.undo;
     if (!g.half) { g.half = 1; return logs; }
     if (g.cur >= n - 1) return finish(g, grade, ctx, logs);
     g.cur += 1; g.half = 0;
@@ -266,8 +284,91 @@ export function sub(g, grade, ctx, team, outPid, inPid) {
   lu[outPid] = grade.reentry ? 'bench' : 'out';
   lu[inPid] = 'on';
   g.used[team] += 1;
+  if (grade.format === 'innings') {
+    g.order[team] = g.order[team].map((pid) => (pid === outPid ? inPid : pid));
+    for (const k of ['b1', 'b2', 'b3']) if (g.bases[k] === outPid) g.bases[k] = inPid;
+  }
   const text = `${ctx.names[team]} 교체 · ${playerLabel(ctx, team, outPid)} 나감 → ${playerLabel(ctx, team, inPid)} 들어감`;
   return [mk(g, grade, ctx, 'sub', text, { team, pout: outPid, pin: inPid })];
+}
+
+// ---------- 이닝제 타석 기록 ----------
+export const isDetail = (g, grade) => grade.format === 'innings' && !!g.detail;
+const HIT = { h1: 1, h2: 2, h3: 3, hr: 4 };
+export const RESULT_NAMES = { h1: '1루타', h2: '2루타', h3: '3루타', hr: '홈런', go: '땅볼 아웃', fo: '플라이 아웃', dp: '병살', e: '출루' };
+// e(출루)는 안타는 아니지만 타자가 1루에 나간 경우다. 수업용이라 실책이라는 말은 기록에 남기지 않는다.
+export const batterOf = (g) => { const side = attacker(g), order = (g.order || {})[side] || []; return order.length ? order[g.bat[side] % order.length] : ''; };
+const snap = (g) => JSON.stringify({ pa: g.pa, pb: g.pb, sa: g.sa, sb: g.sb, bases: g.bases, outs: g.outs, hb: g.hb, bat: g.bat, lb: g.lb || '', halfDone: !!g.halfDone });
+const keepUndo = (g, ctx) => { g.undo = { op: ctx.op || '', cur: g.cur, half: g.half, s: snap(g) }; };
+const detailOnly = (g, grade) => { if (!isDetail(g, grade)) throw new Error('타석 기록을 쓰지 않는 경기입니다.'); };
+// 공격이 끝났는지: 3아웃제는 3아웃, 전원 타격제는 타순이 한 바퀴 돌았을 때. 끝나도 자동으로 넘기지 않고 선생님이 "공수 교대"를 누른다.
+function checkHalf(g, grade) {
+  g.halfDone = grade.rotate === 'out3' ? g.outs >= 3 : g.hb >= g.order[attacker(g)].length;
+}
+
+// 타석 결과. 안타는 타자가 간 만큼 주자도 같이 가고, 홈에 들어오면 점수·득점·타점이 올라간다.
+export function bat(g, grade, ctx, res) {
+  norm(g, grade); live(g); detailOnly(g, grade);
+  if (g.halfDone) throw new Error('이번 공격이 끝났습니다. "공수 교대"를 눌러 주세요.');
+  if (!(res in RESULT_NAMES)) throw new Error('알 수 없는 타석 결과입니다.');
+  const side = attacker(g), pid = batterOf(g), arr = side === 'a' ? g.pa : g.pb;
+  const firstRunner = [1, 2, 3].find((b) => g.bases[`b${b}`]);
+  if (res === 'dp' && !firstRunner) throw new Error('주자가 없으면 병살이 될 수 없습니다.');
+  const entry = mk(g, grade, ctx, 'pa', '', { team: side, pid, res, op: ctx.op || '' });
+  keepUndo(g, ctx);
+  const scored = [];
+  const n = HIT[res] || (res === 'e' ? 1 : 0);
+  if (n) {
+    for (let b = 3; b >= 1; b--) {
+      const r = g.bases[`b${b}`]; if (!r) continue;
+      g.bases[`b${b}`] = '';
+      if (b + n >= 4) scored.push(r); else g.bases[`b${b + n}`] = r;
+    }
+    if (n >= 4) scored.push(pid); else g.bases[`b${n}`] = pid;
+  } else if (res === 'dp') { g.bases[`b${firstRunner}`] = ''; g.outs += 2; }
+  else g.outs += 1;
+  arr[g.cur] += scored.length; recount(g, grade);
+  g.bat[side] = (g.bat[side] + 1) % g.order[side].length; g.hb += 1; g.lb = pid;
+  checkHalf(g, grade);
+  entry.rbi = res === 'e' ? 0 : scored.length; entry.scored = scored;
+  entry.text = `${ctx.names[side]} ${playerLabel(ctx, side, pid)} · ${RESULT_NAMES[res]}${scored.length ? ` · ${scored.length}득점 (${scored.map((r) => playerLabel(ctx, side, r)).join(', ')})` : ''}`;
+  return [entry];
+}
+
+// 주자를 손으로 고친다. op: adv(한 루 더, 3루면 홈인), home(홈인), out(주루 아웃)
+export function runner(g, grade, ctx, base, op) {
+  norm(g, grade); live(g); detailOnly(g, grade);
+  const key = `b${base}`, r = g.bases[key];
+  if (!r) throw new Error('그 루에 주자가 없습니다.');
+  const side = attacker(g), arr = side === 'a' ? g.pa : g.pb, who = playerLabel(ctx, side, r);
+  const entry = mk(g, grade, ctx, 'run', '', { team: side, pid: r, op: ctx.op || '' });
+  if (op === 'adv' && base < 3) {
+    if (g.bases[`b${base + 1}`]) throw new Error('앞 루에 주자가 있습니다. 앞 주자부터 옮겨 주세요.');
+    keepUndo(g, ctx);
+    g.bases[`b${base + 1}`] = r; g.bases[key] = '';
+    entry.text = `${ctx.names[side]} ${who} · 진루 (${base}루 → ${base + 1}루)`;
+  } else if (op === 'adv' || op === 'home') {
+    keepUndo(g, ctx);
+    g.bases[key] = ''; arr[g.cur] += 1; recount(g, grade);
+    entry.scored = [r]; entry.rbiTo = g.lb && g.lb !== r ? g.lb : '';
+    entry.text = `${ctx.names[side]} ${who} · 홈인`;
+  } else if (op === 'out') {
+    keepUndo(g, ctx);
+    g.bases[key] = ''; g.outs += 1;
+    entry.text = `${ctx.names[side]} ${who} · 주루 아웃 (${base}루)`;
+    if (grade.rotate === 'out3') checkHalf(g, grade);
+  } else throw new Error('알 수 없는 주자 처리입니다.');
+  return [entry];
+}
+
+// 방금 한 타석·주자 기록 하나를 되돌린다. 돌려준 op 가 붙은 기록은 화면 쪽에서 취소 표시한다.
+export function undo(g, grade) {
+  norm(g, grade); live(g); detailOnly(g, grade);
+  const u = g.undo;
+  if (!u || u.cur !== g.cur || u.half !== g.half) throw new Error('되돌릴 기록이 없습니다.');
+  Object.assign(g, JSON.parse(u.s));
+  delete g.undo;
+  return [];
 }
 
 export function endGame(g, grade, ctx) {
@@ -297,7 +398,7 @@ export function records(teams, games, logs) {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -309,10 +410,18 @@ export function records(teams, games, logs) {
       const pids = new Set([...Object.keys(st), ...cameIn]);
       for (const pid of pids) {
         const r = row(teamId, pid); if (!r) continue;
-        const goals = sum(glogs.filter((l) => l.type === 'goal' && l.team === side && l.pid === pid).map((l) => l.pts || 1));
+        const mine = glogs.filter((l) => l.team === side);
+        const pas = mine.filter((l) => l.type === 'pa' && l.pid === pid);
+        const hits = pas.filter((l) => l.res in HIT);
+        const runs = mine.filter((l) => (l.type === 'pa' || l.type === 'run') && Object.values(l.scored || {}).includes(pid)).length;
+        const rbi = sum(pas.map((l) => l.rbi || 0)) + mine.filter((l) => l.type === 'run' && l.rbiTo === pid).length;
+        const goals = sum(mine.filter((l) => l.type === 'goal' && l.pid === pid).map((l) => l.pts || 1)) + runs;
         r.games++; if (st[pid]) r.starts++; else r.subIn++;
-        r.goals += goals;
-        const bits = [st[pid] ? '선발' : '교체 투입']; if (goals) bits.push(`${goals}점`);
+        r.goals += goals; r.ab += pas.length; r.h += hits.length; r.rbi += rbi;
+        for (const l of hits) r[l.res] += 1;
+        const bits = [st[pid] ? '선발' : '교체 투입'];
+        if (pas.length) bits.push(`${pas.length}타석 ${hits.length}안타${rbi ? ` ${rbi}타점` : ''}`);
+        if (goals) bits.push(`${goals}${pas.length || runs ? '득점' : '점'}`);
         r.detail.push(`${g.no}경기 ${other}전 · ${bits.join(', ')}`);
       }
     }
