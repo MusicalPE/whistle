@@ -125,6 +125,10 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .log { font-size: 13px; line-height: 1.45; display: flex; gap: 8px; }
 .log b { flex: 0 0 62px; }
 .log.cut span { text-decoration: line-through; color: var(--sub); }
+button.log.edit { width: 100%; border: 0; background: none; padding: 5px 0; text-align: left; font: inherit; font-size: 13px; color: inherit; cursor: pointer; align-items: baseline; }
+button.log.edit span { flex: 1; }
+button.log.edit i { flex: 0 0 auto; font-style: normal; font-size: 12px; font-weight: 700; color: var(--a, #1D4ED8); text-decoration: underline; }
+button.log.edit:hover span { text-decoration: underline; }
 
 .pl { height: 52px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 15px; font-weight: 500; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pl b { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; margin-right: 8px; }
@@ -145,6 +149,15 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
 .nav a { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: var(--sub); text-decoration: none; }
 .nav a.on { font-weight: 700; color: var(--ink); box-shadow: inset 0 3px 0 var(--ink); }
 .nav a.navbrand { display: none; }
+.helpbtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 8px 4px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.helpbtn .q { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; }
+.helpbtn:hover { text-decoration: underline; }
+.helpbtn.innav { display: none; }
+.sheet.help section { border-top: 1px solid var(--line); padding-top: 10px; }
+.sheet.help h3 { font-size: 16px; font-weight: 900; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sheet.help h3 .num { width: 24px; height: 24px; border-radius: 6px; background: var(--ink); color: #fff; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; }
+.sheet.help ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.sheet.help li { font-size: 14px; line-height: 1.5; color: #374151; }
 .colgap { margin-top: 10px; }
 .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--ink); border-radius: 10px; overflow: hidden; }
 .tabs button { height: 44px; border: 0; background: #fff; color: var(--sub); font-size: 14px; font-weight: 500; }
@@ -201,6 +214,9 @@ textarea.input { height: 160px; padding: 10px; font-weight: 500; line-height: 1.
   .nav a.navbrand img { transition: transform .15s; }
   .nav a { height: 52px; justify-content: flex-start; padding-left: 28px; font-size: 16px; }
   .nav a.on { box-shadow: inset 4px 0 0 var(--ink); background: var(--bg); }
+  .helpbtn.innav { display: flex; margin-top: auto; padding: 18px 28px 26px; font-size: 15px; }
+  .helpbtn.inhome { display: none; }
+  .sheet.help { max-width: 620px; }
   .app:has(> .nav) .top > .brand { display: none; }
   .app:has(> .nav) .top { padding-top: 28px; }
   .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }

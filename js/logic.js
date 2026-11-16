@@ -220,6 +220,15 @@ export function score(g, grade, ctx, team, pts, pid, apid) {
   return [mk(g, grade, ctx, 'goal', `${ctx.names[team]} 득점${pts > 1 ? ` +${pts}` : ''} · ${who}${helper ? ` (어시스트 ${helper})` : ''}`, { team, pid: pid || '', apid: helper ? apid : '', pts, part: g.cur })];
 }
 
+// 이미 남긴 득점 기록의 선수를 나중에 고친다(바빠서 점수만 올렸을 때). 점수는 그대로 두고 기록만 바꾼다.
+export function editGoal(l, ctx, pid, apid) {
+  if (!l || l.type !== 'goal' || l.x) throw new Error('고칠 수 있는 득점 기록이 아닙니다.');
+  const who = (pid && playerLabel(ctx, l.team, pid)) || '선수 기록 없음';
+  const helper = pid && apid && apid !== pid ? playerLabel(ctx, l.team, apid) : '';
+  const pts = l.pts || 1;
+  return { pid: (who !== '선수 기록 없음' && pid) || '', apid: helper ? apid : '', text: `${ctx.names[l.team]} 득점${pts > 1 ? ` +${pts}` : ''} · ${who}${helper ? ` (어시스트 ${helper})` : ''}` };
+}
+
 function finish(g, grade, ctx, logs) {
   if (g.clock) g.clock = { run: false, left: clockLeft(g, ctx.now), at: ctx.now };
   g.status = 'done'; g.endedAt = ctx.now;

@@ -161,7 +161,7 @@ try {
     await shot(s, '06-student'); await shot(b, '07-board');
   });
 
-  await step('전반 끝내기 → 후반 → 경기 종료, 순위표', async () => {
+  await step('전반 끝내기 → 후반 → 경기 종료, 득점 기록 고치기, 순위표', async () => {
     await btn(t, '전반 끝내기').click();
     await t.waitForSelector('text=후반 끝내기').catch(() => {});
     assert.match(await text(t), /전반 종료 1 : 1/);
@@ -173,6 +173,32 @@ try {
     await sbtn(t, '경기 종료').click();
     await t.waitForFunction(() => /경기 종료 2 : 1/.test(document.body.innerText));
     assert.equal(await t.locator('[data-act="gPlus"]').count(), 0);
+    // 끝난 경기에서도 득점 기록을 눌러 넣은 선수와 어시스트를 고칠 수 있다(점수는 그대로)
+    const goalRow = t.locator('button.log.edit').first();
+    const before = await goalRow.locator('span').innerText();
+    const who = before.split('· ')[1].trim().split(' ').slice(1).join(' ');
+    await goalRow.click();
+    await t.waitForSelector('text=누가 넣었나요?');
+    assert.ok((await t.locator('#sheet .pl.on').innerText()).includes(who), '지금 기록된 선수가 표시돼야 함');
+    await t.locator('#sheet .pl:not(.on)').first().click();
+    await t.waitForSelector('text=누가 어시스트 했나요?');
+    await t.locator('#sheet .pl').first().click();
+    await t.waitForFunction(() => /어시스트/.test(document.querySelector('button.log.edit span').textContent));
+    assert.notEqual(await goalRow.locator('span').innerText(), before);
+    assert.equal(await t.locator('[data-score="a"]').innerText(), '2', '점수는 그대로');
+    await goalRow.click();
+    await t.locator('#sheet .pl', { hasText: who }).click();
+    await sbtn(t, '어시스트 없음').click();
+    await t.waitForFunction((b) => document.querySelector('button.log.edit span').textContent === b, before);
+    await goalRow.click();
+    await sbtn(t, '선수 기록 없음으로 두기').click();
+    await t.waitForFunction(() => /선수 기록 없음/.test(document.querySelector('button.log.edit span').textContent));
+    assert.equal(await goalRow.locator('i').innerText(), '선수 넣기');
+    await goalRow.click();
+    await t.locator('#sheet .pl', { hasText: who }).click();
+    await sbtn(t, '어시스트 없음').click();
+    await t.waitForFunction((b) => document.querySelector('button.log.edit span').textContent === b, before);
+    await shot(t, '07b-edit-goal');
     await s.getByRole('button', { name: '경기 결과' }).click();
     assert.match(await text(s), /순위표[\s\S]*6-1 번개\s*1\s*1\s*0\s*0\s*3/);
   });
@@ -579,7 +605,7 @@ try {
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);
     const m = await t.locator('.nav').boundingBox();
-    assert.ok(m.width > 380 && m.height < 70, '폰에서는 메뉴가 아래 가로로 있어야 함');
+    assert.ok(m.width > 380 && m.height < 70, `폰에서는 메뉴가 아래 가로로 있어야 함 ${JSON.stringify(m)}`);
   });
 
   await step('체험용 미리보기(?demo): 지어낸 대회가 채워져 있고 평소 자료와 따로 저장', async () => {
@@ -601,6 +627,29 @@ try {
     await s2.waitForSelector('text=학생용 · 보기 전용');
     assert.match(await s2.locator('#app').innerText(), /1 : 1/);
     await c2.close();
+  });
+
+  await step('사용 안내: 대회 안과 대회 목록에서 간략 사용법 열기', async () => {
+    await t.setViewportSize({ width: 390, height: 844 });
+    await t.goto(`${base}#home`);
+    await t.locator('#app .helpbtn:visible').first().click();
+    await t.waitForSelector('text=휘슬! 간략 사용법');
+    assert.match(await t.locator('#sheet').innerText(), /처음 준비[\s\S]*경기 진행[\s\S]*선수 없이 점수만 올리기[\s\S]*학생 화면과 전광판[\s\S]*함께 심판 보기[\s\S]*대회가 끝나면/);
+    await shot(t, '36-help');
+    await sbtn(t, '확인').click();
+    assert.equal(await t.locator('#sheet .sheet').count(), 0);
+    await t.setViewportSize({ width: 1280, height: 800 });
+    await t.goto(`${base}#games`);
+    await t.locator('.nav .helpbtn').click();
+    await t.waitForSelector('text=휘슬! 간략 사용법');
+    await shot(t, '37-help-pc');
+    await sbtn(t, '닫기').click();
+    await t.setViewportSize({ width: 390, height: 844 });
+    await t.goto(`${base}#home`); await btn(t, '대회 목록').click();
+    await t.waitForSelector('text=내 대회');
+    await t.locator('#app .helpbtn:visible').first().click();
+    await t.waitForSelector('text=휘슬! 간략 사용법');
+    await sbtn(t, '확인').click();
   });
 
   assert.deepEqual(errors, [], '화면 오류가 없어야 함');

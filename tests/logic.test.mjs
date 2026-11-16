@@ -437,3 +437,21 @@ test('빠짐으로 둔 선수는 경기 명단에 들어가지 않는다', () =>
   assert.equal(g.lineup.a.p8, undefined);
   assert.equal(Object.values(g.lineup.a).filter((s) => s === 'bench').length, 2);
 });
+
+test('득점 기록 고치기: 점수만 올린 기록에 나중에 선수와 어시스트를 넣으면 개인 기록에 잡힌다', () => {
+  const grade = { ...L.gradeFromSport('soccer', '6학년'), starters: 3 };
+  const teams = { ta: { name: '가팀', players: roster(3, 3) }, tb: { name: '나팀', players: roster(3, 3) } };
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  const c = (now) => ctxAt(now, { rosters: { a: teams.ta.players, b: teams.tb.players } });
+  L.start(g, grade, c(0));
+  const [goal] = L.score(g, grade, c(1), 'a', 1, '');
+  assert.match(goal.text, /선수 기록 없음/);
+  const fixed = { ...goal, ...L.editGoal(goal, c(9), 'p2', 'p3') };
+  assert.equal(fixed.text, '가팀 득점 · 2 선수2 (어시스트 3 선수3)');
+  assert.deepEqual([fixed.pid, fixed.apid, fixed.at, g.sa], ['p2', 'p3', goal.at, 1]);
+  const rec = Object.fromEntries(L.records(teams, [g], { x: { l1: fixed } }).map((r) => [r.key, r]));
+  assert.deepEqual([rec['ta/p2'].goals, rec['ta/p3'].as], [1, 1]);
+  assert.deepEqual(L.editGoal(fixed, c(9), '', 'p3'), { pid: '', apid: '', text: '가팀 득점 · 선수 기록 없음' });
+  assert.equal(L.editGoal(fixed, c(9), 'p2', 'p2').apid, '');
+  assert.throws(() => L.editGoal({ ...goal, x: true }, c(9), 'p2', ''));
+});
