@@ -240,3 +240,35 @@ button.log.edit:hover span { text-decoration: underline; }
   .tbl button.tr:hover { background: #F0F4FF; }
   .back:hover, .btn.plain:not(:disabled):hover { color: var(--ink); filter: none; }
 }
+
+/* 대회 편성: 추첨 그림 */
+.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.dteam { border: 1.5px solid var(--ink); background: #fff; color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.dteam.on { background: var(--ink); color: #fff; }
+.dteam:disabled { cursor: default; opacity: 1; }
+.dteam.pop { animation: dpop .5s both; }
+@keyframes dpop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+.dgroups { display: grid; gap: 8px; }
+.dgroup { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--bg); }
+.dgroup > b { font-size: 15px; }
+.dcup { display: flex; flex-direction: column; gap: 8px; }
+.dpair { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--bg); }
+.dring { position: relative; width: min(100%, 340px); aspect-ratio: 1; margin: 6px auto; }
+.dseat { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.dring .dseat { transform: translate(calc(sin(360deg / var(--n) * var(--i)) * min(41vw, 140px)), calc(cos(360deg / var(--n) * var(--i)) * min(41vw, 140px) * -1)); }
+.dseat .dteam { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.dseat .dteam.pop { animation-name: dpopc; }
+@keyframes dpopc { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%); } }
+.dmid { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; color: var(--sub); pointer-events: none; }
+.dring::before { content: ''; position: absolute; inset: 9%; border: 2px dashed var(--line); border-radius: 50%; }
+.board .drawbox { flex: 1; display: flex; flex-direction: column; gap: 3vh; justify-content: center; }
+.board .drawbox h2 { font-size: clamp(22px, 3.4vw, 48px); font-weight: 900; text-align: center; }
+.board .drawbox .sub { text-align: center; color: var(--dim); font-size: clamp(13px, 1.6vw, 22px); }
+.board .dteam { border-color: #fff; background: #fff; font-size: clamp(15px, 2vw, 30px); padding: 1.2vh 1.4vw; }
+.board .dgroup, .board .dpair { background: transparent; border-color: #39424F; padding: 2vh 1.4vw; gap: 1.4vh; }
+.board .dgroup > b, .board .dpair .label { color: #fff; font-size: clamp(16px, 2.2vw, 32px); }
+.board .dring { width: min(62vh, 70vw); }
+.board .dring .dseat { transform: translate(calc(sin(360deg / var(--n) * var(--i)) * min(26vh, 29vw)), calc(cos(360deg / var(--n) * var(--i)) * min(26vh, 29vw) * -1)); }
+.board .dseat .dteam { max-width: 26vw; }
+.board .dring::before { border-color: #39424F; }
+.board .dmid { color: var(--dim); font-size: clamp(13px, 1.6vw, 22px); }

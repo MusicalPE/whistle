@@ -50,14 +50,16 @@ export const partMs = (grade) => Math.max(1, Number(grade.minutes) || 1) * 60000
 // 같은 득점이 겹쳤는지 물어보는 시간(밀리초). 득점이 빠른 종목은 짧게.
 export const dupWindow = (grade) => (grade.sport === 'basket' || grade.sport === 'netball' ? 5000 : 10000);
 
-export function partCount(grade) {
-  if (isTimed(grade)) return TIMED_NAMES[grade.format].length;
-  if (grade.format === 'innings') return Math.max(1, Number(grade.innings) || 1);
-  return Math.max(1, Number(grade.sets) || 1);
+// g 를 주면 그 경기에 붙은 연장 구간(g.xp)까지 센다.
+export function partCount(grade, g) {
+  const extra = (g && Number(g.xp)) || 0;
+  if (isTimed(grade)) return TIMED_NAMES[grade.format].length + extra;
+  if (grade.format === 'innings') return Math.max(1, Number(grade.innings) || 1) + extra;
+  return Math.max(1, Number(grade.sets) || 1) + extra;
 }
 
 export function partName(grade, i, half) {
-  if (isTimed(grade)) return TIMED_NAMES[grade.format][i] || '';
+  if (isTimed(grade)) { const base = TIMED_NAMES[grade.format]; return base[i] || `연장${i - base.length ? ` ${i - base.length + 1}` : ''}`; }
   if (grade.format === 'innings') return `${i + 1}회 ${half ? '말' : '초'}`;
   return `${i + 1}세트`;
 }
@@ -68,7 +70,7 @@ export function newGame(gid, no, a, b) {
 
 // 저장소가 빈 배열·빈 객체를 지우기 때문에, 읽은 경기에 빠진 칸을 채운다.
 export function norm(g, grade) {
-  const n = partCount(grade);
+  const n = partCount(grade, g);
   const pad = (arr) => Array.from({ length: n }, (_, i) => Number((arr || [])[i]) || 0);
   g.pa = pad(g.pa); g.pb = pad(g.pb);
   g.wins = Array.isArray(g.wins) ? g.wins : Object.values(g.wins || {});
@@ -105,8 +107,8 @@ export function fmtClock(ms) {
 export function tag(g, grade, now) {
   if (g.status === 'ready') return '경기 전';
   if (isTimed(grade)) {
-    const total = partMs(grade);
-    const min = Math.min(Math.max(1, Number(grade.minutes) || 1), Math.floor((total - clockLeft(g, now)) / 60000) + 1);
+    const total = g.cur >= TIMED_NAMES[grade.format].length && g.xms ? g.xms : partMs(grade);
+    const min = Math.min(Math.max(1, Math.round(total / 60000)), Math.floor((total - clockLeft(g, now)) / 60000) + 1);
     return `${partName(grade, g.cur)} ${min}분`;
   }
   return partName(grade, g.cur, g.half);
@@ -239,7 +241,7 @@ function finish(g, grade, ctx, logs) {
 // 전반 끝내기, 세트 끝내기, 공수 교대처럼 다음 구간으로 넘어간다. 마지막 구간이면 경기를 끝낸다.
 export function nextPart(g, grade, ctx) {
   norm(g, grade); live(g);
-  const n = partCount(grade);
+  const n = partCount(grade, g);
   if (isTimed(grade)) {
     const logs = [mk(g, grade, ctx, 'info', `${partName(grade, g.cur)} 종료 ${g.sa} : ${g.sb}`)];
     if (g.cur >= n - 1) return finish(g, grade, ctx, logs);
@@ -276,7 +278,7 @@ export function nextPart(g, grade, ctx) {
 }
 
 function endDodgeSet(g, grade, ctx, winner, reason) {
-  const n = partCount(grade);
+  const n = partCount(grade, g);
   const text = winner === 'd' ? `${g.cur + 1}세트 무승부 (${reason})` : `${g.cur + 1}세트 ${ctx.names[winner]} 승 (${reason})`;
   const logs = [mk(g, grade, ctx, 'info', text)];
   g.wins[g.cur] = winner; g.why[g.cur] = reason; g.tie = false; g.ext = false; g.dout = { a: {}, b: {} };
@@ -434,6 +436,25 @@ export function undo(g, grade) {
 export function endGame(g, grade, ctx) {
   norm(g, grade); live(g);
   return finish(g, grade, ctx, []);
+}
+
+// 동점으로 끝난 경기에 연장 구간을 하나 붙여 다시 진행한다(토너먼트처럼 승자가 꼭 필요할 때).
+// 시간제 연장은 한 구간 시간의 절반(올림)이다.
+export function extend(g, grade, ctx) {
+  norm(g, grade);
+  if (g.status !== 'done') throw new Error('끝난 경기에서만 연장을 열 수 있습니다.');
+  if (g.sa !== g.sb) throw new Error('동점일 때만 연장을 엽니다.');
+  g.xp = (Number(g.xp) || 0) + 1;
+  norm(g, grade);
+  g.status = 'live'; delete g.endedAt; delete g.win;
+  g.cur = partCount(grade, g) - 1; g.half = 0;
+  if (hasClock(grade)) {
+    g.xms = grade.format === 'dodge' ? partMs(grade) : Math.max(1, Math.ceil((Number(grade.minutes) || 1) / 2)) * 60000;
+    g.clock = { run: false, left: g.xms, at: ctx.now };
+  }
+  if (grade.format === 'dodge') { g.remain = { ...g.r0 }; g.tie = false; g.ext = false; g.dout = { a: {}, b: {} }; }
+  if (grade.format === 'innings') { g.outs = 0; g.hb = 0; g.halfDone = false; g.bases = { b1: '', b2: '', b3: '' }; delete g.undo; }
+  return [{ at: ctx.now, tag: '연장', type: 'info', text: `동점 ${g.sa} : ${g.sb} · ${partName(grade, g.cur, 0)} 시작`, by: ctx.uid || '' }];
 }
 
 // 끝난 경기 기준 순위표. 승 3점, 무 1점.

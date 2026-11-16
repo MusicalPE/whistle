@@ -1,6 +1,7 @@
 // 휘슬! 화면. 주소에 따라 선생님 화면, 학생 화면(?v=대회), 전광판(?b=대회)으로 열린다.
 import { VERSION } from './version.js';
 import * as L from './logic.js';
+import * as P from './plan.js';
 import { createStore, forceDemo, CONFIGURED, TRY, TID_KEY } from './store.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,7 +28,7 @@ const canTeams = () => ['owner', 'admin', 'editor'].includes(myRole());
 const gradeList = () => Object.entries(T().grades || {}).map(([id, g]) => ({ id, ...g })).sort((a, b) => (a.order || 0) - (b.order || 0));
 const grade = () => { const list = gradeList(); return list.find((g) => g.id === S.gid) || list[0] || null; };
 const teamsOf = (gid) => Object.fromEntries(Object.entries(T().teams || {}).filter(([, t]) => t.gid === gid));
-const teamName = (id) => ((T().teams || {})[id] || {}).name || '(지워진 팀)';
+const teamName = (id) => (P.isOpen(id) ? P.openName(id) : ((T().teams || {})[id] || {}).name || '(지워진 팀)');
 const playersOf = (teamId) => Object.entries(((T().teams || {})[teamId] || {}).players || {}).map(([pid, p]) => ({ pid, ...p })).sort((a, b) => (Number(a.no) || 0) - (Number(b.no) || 0) || String(a.name).localeCompare(String(b.name), 'ko'));
 const gameOf = (id) => {
   const g = (T().games || {})[id]; const gr = g && (T().grades || {})[g.gid];
@@ -113,6 +114,7 @@ async function act(gameId, fn) {
   try {
     await S.store.tx(`t/${S.tid}/games/${gameId}`, (g) => { logs = fn(g, gr, ctxFor(g, gameId)) || []; return JSON.parse(JSON.stringify(g)); });
     for (const l of logs) await S.store.push(`t/${S.tid}/logs/${gameId}`, l);
+    if (g0.stage) await syncBracket(g0.gid);
     return true;
   } catch (e) { toast(friendly(e)); return false; }
 }
@@ -135,6 +137,7 @@ function qrSvg(url) {
 const helpBtn = (cls = '') => `<button class="helpbtn ${cls}" data-act="help"><span class="q" aria-hidden="true">?</span>사용 안내</button>`;
 const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
+  ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄워 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
   ['학생 화면과 전광판', ['"경기" 탭의 학생용 QR을 크게 띄워 보여 줍니다. 학생은 로그인 없이 보기만 합니다.', '학생 화면은 몇 초마다 새로 읽어서 5초쯤 늦게 바뀝니다.', '"전광판 모드"를 TV나 전자칠판에 띄우면 큰 점수판이 됩니다.', 'QR과 주소는 우리 학교 학생과 학부모에게만 공유해 주세요.']],
   ['함께 심판 보기', ['홈 오른쪽 위 "함께하는 선생님 · 초대"에서 초대 QR이나 코드를 보냅니다.', '선생님마다 경기 진행만, 팀 명단과 일정까지, 모든 설정까지 가운데 권한을 정합니다.']],
@@ -188,7 +191,7 @@ function mainScore(g, gr) {
 }
 
 function partsTable(g, gr) {
-  const n = L.partCount(gr);
+  const n = L.partCount(gr, g);
   if (L.isTimed(gr) && n < 2) return '';
   const cols = `minmax(0,1fr) repeat(${n}, 34px) 44px`;
   const head = Array.from({ length: n }, (_, i) => `<span>${gr.format === 'innings' ? i + 1 : L.isTimed(gr) ? L.partName(gr, i).replace('쿼터', 'Q') : `${i + 1}세트`}</span>`).join('');
@@ -258,7 +261,7 @@ function gameCard(g, href) {
   const st = live ? `<span class="pill"><span class="dot"></span>${statusText(g)}</span>` : `<span>${statusText(g)}${when ? ` · ${esc(when)}` : ''}</span>`;
   const gr = T().grades[g.gid];
   const part = live ? ` · ${L.partName(gr, g.cur, g.half)}` : '';
-  const inner = `<div class="row between label"><span>${g.no}경기${part}</span>${st}</div><div class="vs"><span class="ta">${esc(teamName(g.a))}</span><span class="num sc">${scoreText(g)}</span><span class="tb right">${esc(teamName(g.b))}</span></div>`;
+  const inner = `<div class="row between label"><span>${g.no}경기${g.label ? ` · ${esc(g.label)}` : ''}${part}</span>${st}</div><div class="vs"><span class="ta">${esc(teamName(g.a))}</span><span class="num sc">${scoreText(g)}</span><span class="tb right">${esc(teamName(g.b))}</span></div>`;
   return href ? `<a class="card game${live ? ' live' : ''}" href="${href}">${inner}</a>` : `<div class="card game${live ? ' live' : ''}">${inner}</div>`;
 }
 
@@ -272,7 +275,7 @@ function homeTop(tab) {
 <div class="row between"><h1 class="title grow">${esc(T().meta.name)}</h1><button class="btn sm" style="flex:0 0 auto" data-act="leaveT">대회 목록</button></div>
 <div class="row small muted" style="justify-content:flex-end;gap:14px">${helpBtn('inhome')}<a href="#members" class="bold" style="padding:10px 0">함께하는 선생님 ${Object.keys(S.M || {}).length || 1}명${owner ? ' · 초대' : ''}</a></div></header>
 <div class="chips">${gradeChips(true)}</div>
-${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${canTeams() ? item('teams', '팀 명단') : ''}${canRules() ? item('rules', '종목·규칙') : ''}${item('records', '개인 기록')}${canRules() ? '<button class="del" data-act="delGradeAsk">학년 지우기</button>' : ''}</div>` : ''}`;
+${gr ? `<div class="submenu"><span class="label">${esc(gr.label)} ${esc(L.sportName(gr))}</span>${canTeams() ? item('teams', '팀 명단') : ''}${canRules() ? item('rules', '종목·규칙') : ''}${canRules() ? item('plan', '대회 편성') : ''}${item('records', '개인 기록')}${canRules() ? '<button class="del" data-act="delGradeAsk">학년 지우기</button>' : ''}</div>` : ''}`;
 }
 
 function homeScreen() {
@@ -296,8 +299,93 @@ ${liveElse.length ? `<h2 class="h2" style="margin-top:10px">다른 학년에서 
 <div class="spacer"></div>${nav('games')}</div>`;
 }
 
+// ---------- 대회 편성 ----------
+const planTeams = (gid) => Object.entries(teamsOf(gid)).sort(([, a], [, b]) => String(a.name).localeCompare(String(b.name), 'ko', { numeric: true })).map(([id]) => id);
+const stagedOf = (gid) => gamesOf(gid).filter((g) => g.stage);
+// 저장된 추첨 순서가 지금 팀 목록과 맞을 때만 쓴다.
+const drawOrder = (gr) => { const ids = planTeams(gr.id), o = Array.isArray((gr.plan || {}).order) ? gr.plan.order : Object.values((gr.plan || {}).order || {}); return o.length === ids.length && ids.every((t) => o.includes(t)) ? o : null; };
+const planOf = (gr) => P.normPlan(gr.plan, planTeams(gr.id).length);
+
+// 추첨 결과 그림. at 이 있으면 그 시각부터 한 팀씩 차례로 나타난다(전광판 추첨).
+function drawView(gr, order, at) {
+  const plan = planOf(gr), n = order.length, step = 1.3;
+  const el = at ? (S.store.now() - at) / 1000 : 1e6;
+  const chip = (t, extra = '') => { const i = order.indexOf(t); return `<button class="dteam${S.swap === t ? ' on' : ''}${at ? ' pop' : ''}" ${at ? `style="animation-delay:${(i * step - el + 1).toFixed(2)}s"` : ''} data-act="swapTeam" data-team="${t}"${at ? ' disabled' : ''}>${extra}${esc(teamName(t))}</button>`; };
+  if (plan.mode === 'groups') {
+    return `<div class="dgroups" style="grid-template-columns:repeat(${Math.min(plan.groups, 4)},minmax(0,1fr))">${P.groupsOf(plan, order).map((ids, g) => `<div class="dgroup"><b>${P.groupName(g)}</b>${ids.map((t) => chip(t)).join('')}</div>`).join('')}</div>`;
+  }
+  if (plan.mode === 'ring') {
+    return `<div class="dring" style="--n:${n}">${order.map((t, i) => `<div class="dseat" style="--i:${i}">${chip(t)}</div>`).join('')}<div class="dmid">옆자리 팀과<br>한 번씩</div></div>`;
+  }
+  if (plan.mode === 'cup') {
+    let k = 0; const games = Object.values(P.buildGames(plan, order, gr.id, () => `p${k++}`, 1, L.newGame));
+    const first = Math.max(...games.map((g) => g.round)), inFirst = games.filter((g) => g.round === first);
+    const playing = new Set(inFirst.flatMap((g) => [g.a, g.b]));
+    const byes = order.filter((t) => !playing.has(t));
+    return `<div class="dcup">${inFirst.map((g) => `<div class="dpair"><span class="label">${esc(g.label)}</span>${chip(g.a)}<span class="muted">vs</span>${chip(g.b)}</div>`).join('')}${byes.length ? `<div class="dpair"><span class="label">부전승</span>${byes.map((t) => chip(t)).join('')}</div>` : ''}</div>`;
+  }
+  return `<div class="dcup"><div class="dpair">${order.map((t) => chip(t)).join('')}</div></div>`;
+}
+
+function groupTables(gr) {
+  const games = gamesOf(gr.id), teams = teamsOf(gr.id);
+  const grps = [...new Set(games.filter((g) => g.stage === 'G').map((g) => g.grp || 0))].sort((a, b) => a - b);
+  const cols = '28px minmax(0,1fr) 30px 30px 30px 30px 38px';
+  return grps.map((grp) => {
+    const t = P.groupTable(games, teams, grp), name = t.games[0].label;
+    return `<div class="stack" style="gap:6px"><h2 class="h2">${esc(name)} 순위 <span class="small muted" style="font-weight:500">· ${t.done ? '예선 끝' : '끝난 경기 기준'}</span></h2><div class="card tbl"><div class="tr th" style="grid-template-columns:${cols}"><span>순위</span><span class="l">팀</span><span>경기</span><span>승</span><span>무</span><span>패</span><span>승점</span></div>${t.rows.map((r) => `<div class="tr" style="grid-template-columns:${cols}"><b class="num">${r.rank}</b><b class="l">${esc(r.name)}</b><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><b>${r.pts}</b></div>`).join('')}</div></div>`;
+  }).join('');
+}
+
+function bracketList(gr) {
+  const ko = gamesOf(gr.id).filter((g) => g.stage === 'K');
+  if (!ko.length) return '';
+  const side = (g, s) => { const w = P.winnerOf(g); return `<span class="${P.isOpen(g[s]) ? 'muted' : w === s ? 'bold' : ''}">${esc(teamName(g[s]))}</span>`; };
+  return `<div class="stack" style="gap:6px"><h2 class="h2">결선 대진</h2><div class="card tbl">${ko.map((g) => `<div class="tr" style="grid-template-columns:76px minmax(0,1fr) 56px minmax(0,1fr)"><span class="l label">${esc(g.label)}</span>${side(g, 'a')}<b class="num">${g.status === 'ready' ? 'vs' : `${g.sa} : ${g.sb}`}</b>${side(g, 'b')}</div>`).join('')}</div></div>`;
+}
+
+function planScreen() {
+  const gr = grade();
+  if (!gr) return homeScreen();
+  const ids = planTeams(gr.id), n = ids.length, info = P.planInfo(gr.plan, n), plan = info.plan, staged = stagedOf(gr.id), order = drawOrder(gr);
+  const showing = T().display && T().display.mode === 'draw' && T().display.gid === gr.id;
+  const boardBtn = `<button class="btn sm" data-act="drawBoard">${showing ? '전광판 추첨 닫기' : '전광판에 추첨 띄우기'}</button>`;
+  let body;
+  if (staged.length) {
+    const started = staged.some((g) => g.status !== 'ready');
+    body = `<div class="card p stack"><b>${esc(P.MODES[plan.mode])}</b><span class="note">${esc(info.text)}</span><span class="small muted">편성된 경기 ${staged.length}개는 "경기" 탭에 있습니다. 예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다.</span>
+<div class="grid2">${order && plan.mode !== 'league' ? boardBtn : ''}<button class="btn sm" data-act="planSync">결선 자리 다시 채우기</button></div></div>
+${groupTables(gr)}${bracketList(gr)}
+<button class="btn plain" data-act="planClearAsk">${started ? '시작하지 않은 편성 경기 지우기' : '편성 지우고 다시 짜기'}</button>`;
+  } else {
+    const stepper = (key, val, unit, min, max, label) => `<div class="stepper"><button data-act="planStep" data-key="${key}" data-d="-1" data-min="${min}" data-max="${max}" aria-label="${label} 줄이기">−</button><b>${val}${unit}</b><button data-act="planStep" data-key="${key}" data-d="1" data-min="${min}" data-max="${max}" aria-label="${label} 늘리기">+</button></div>`;
+    const opts = `${plan.mode === 'groups' ? `<div class="set"><span>조 개수</span>${stepper('groups', plan.groups, '개 조', 2, Math.max(2, Math.min(8, Math.floor(n / 2))), '조 개수')}</div><div class="set"><span>조마다 결선에 오르는 팀</span>${stepper('adv', plan.adv, '팀', 1, 4, '조별 진출 팀')}</div>` : ''}
+${plan.mode === 'ring' ? `<div class="set"><span>결선에 오르는 팀</span>${stepper('adv', plan.adv, '팀', 2, Math.max(2, n - 1), '결선 진출 팀')}</div>` : ''}
+${info.ent >= 4 ? `<div class="set"><span>3·4위전</span><div class="seg"><button class="${plan.third ? 'on' : ''}" data-act="planSet" data-key="third" data-val="1">함</button><button class="${plan.third ? '' : 'on'}" data-act="planSet" data-key="third" data-val="">안 함</button></div></div>` : ''}`;
+    const ok = !info.problems.length;
+    body = `<div class="card stack" style="gap:0"><div class="set" style="flex-wrap:wrap;gap:8px"><span>대회 방식</span><div class="modes">${Object.entries(P.MODES).map(([k, t]) => `<button class="chip${plan.mode === k ? ' on' : ''}" data-act="planSet" data-key="mode" data-val="${k}">${t}</button>`).join('')}</div></div>
+<div class="set"><span class="note">${esc(P.MODE_NOTES[plan.mode])}</span></div>${opts}</div>
+<div class="card p stack"><span class="label">이렇게 짜집니다 · ${n}팀</span>${ok ? `<b>${esc(info.text)}</b><span class="small muted">모두 ${info.total}경기${info.ent ? ' · 결선이 동점으로 끝나면 연장을 열거나 승자를 고릅니다' : ''}</span>` : `<b style="color:#B42318">${esc(info.problems[0])}</b>`}</div>
+${ok && plan.mode !== 'league' ? `<div class="card p stack"><div class="row between"><b>추첨</b>${order ? '<span class="small muted">두 팀을 차례로 누르면 자리를 바꿉니다</span>' : ''}</div>
+${order ? drawView(gr, order) : '<span class="note">팀을 무작위로 섞어 자리에 넣습니다.</span>'}
+<div class="grid2"><button class="btn sm ${order ? '' : 'primary'}" data-act="planDraw">${order ? '다시 뽑기' : '추첨하기'}</button>${order ? boardBtn : ''}</div></div>` : ''}
+${ok ? `<button class="btn primary big" data-act="planMake"${plan.mode !== 'league' && !order ? ' disabled' : ''}>${plan.mode !== 'league' && !order ? '추첨한 뒤 경기를 짤 수 있습니다' : `이대로 경기 ${info.total}개 짜기`}</button>` : ''}
+${gamesOf(gr.id).length ? `<p class="note">지금 있는 경기 ${gamesOf(gr.id).length}개는 그대로 두고 그 뒤에 이어서 짭니다.</p>` : ''}`;
+  }
+  return `${homeTop('plan')}<div class="tabbody narrowin"><div class="pad stack" style="padding-top:12px;gap:12px">${n < 2 ? '<p class="note">먼저 "팀 명단"에서 팀을 두 팀 이상 만들어 주세요.</p>' : body}</div></div><div class="spacer"></div>${nav('home')}</div>`;
+}
+
+// 예선이나 앞 경기 결과에 맞춰 결선 자리의 팀을 채운다(되돌려야 하면 되돌린다).
+async function syncBracket(gid) {
+  const games = gamesOf(gid);
+  if (!games.some((g) => g.stage === 'K')) return;
+  const up = {}, res = P.resolve(games, teamsOf(gid));
+  for (const [id, sides] of Object.entries(res)) for (const [s, v] of Object.entries(sides)) up[`${id}/${s}`] = v;
+  if (Object.keys(up).length) await S.store.update(`t/${S.tid}/games`, up).catch(() => {});
+}
+
 function controls(g, gr) {
-  const n = L.partCount(gr), last = g.cur >= n - 1;
+  const n = L.partCount(gr, g), last = g.cur >= n - 1;
   const clockBtn = L.hasClock(gr) ? `<button class="btn primary" data-act="gClock" data-id="${g.id}"${g.clock.left <= 0 && !g.clock.run ? ' disabled' : ''}>${g.clock.run ? '일시 정지' : g.clock.left <= 0 ? '시간 종료' : '시계 시작'}</button>` : '';
   let next;
   if (L.isTimed(gr)) next = last ? '경기 종료' : `${L.partName(gr, g.cur)} 끝내기`;
@@ -321,9 +409,12 @@ function gameScreen(id) {
   const g = gameOf(id);
   if (!g) return `<div class="app"><div class="bar"><a class="back" href="#games">‹ 경기</a></div><p class="note pad">경기를 찾을 수 없습니다.</p></div>`;
   const gr = T().grades[g.gid];
-  const head = `<header class="bar"><a class="back" href="#games">‹ 경기</a><b style="font-size:15px">${g.no}경기${g.status === 'live' ? ` · ${L.partName(gr, g.cur, g.half)}` : ''}</b><span class="pill">${g.status === 'live' ? '<span class="dot"></span>' : ''}${statusText(g)}</span></header>`;
+  const head = `<header class="bar"><a class="back" href="#games">‹ 경기</a><b style="font-size:15px">${g.no}경기${g.label ? ` · ${esc(g.label)}` : ''}${g.status === 'live' ? ` · ${L.partName(gr, g.cur, g.half)}` : ''}</b><span class="pill">${g.status === 'live' ? '<span class="dot"></span>' : ''}${statusText(g)}</span></header>`;
   const logs = logsOf(id);
   const logBox = logs.length ? `<section class="pad stack" style="gap:4px;margin-top:12px"><h2 class="label">경기 기록 · 득점 기록을 누르면 넣은 선수를 고칠 수 있습니다</h2>${logs.slice(0, g.status === 'done' ? 40 : 6).map(L.usesPicker(gr) ? teacherLogRow(g.id) : logRow).join('')}</section>` : '';
+  const tied = g.status === 'done' && g.stage === 'K' && g.sa === g.sb;
+  const tieBox = tied ? `<section class="pad" style="margin-top:12px"><div class="card p stack" style="border-color:#C2410C;background:#FFF4E5"><b>${g.win ? `동점 · ${esc(teamName(g[g.win]))} 승리로 정했습니다` : '동점입니다. 결선은 승자가 있어야 다음 경기가 정해집니다.'}</b>
+<div class="grid2"><button class="btn sm primary" data-act="gExtend" data-id="${g.id}">연장 열기</button><button class="btn sm" data-act="winAsk" data-id="${g.id}">${g.win ? '승자 바꾸기' : '승자 고르기'}</button></div><span class="small muted">연장은 시간제 종목은 한 구간의 절반, 그 밖의 종목은 한 세트·한 회를 더 합니다. 승부차기 등으로 정했다면 승자를 골라 주세요.</span></div></section>` : '';
   if (g.status === 'ready') {
     const inn = gr.format === 'innings';
     const sentRos = (side) => { const list = orderList(id, side, g), P = Object.fromEntries(playersOf(g[side]).map((p) => [p.pid, p])); return `<div class="card lineup ${side}"><b class="t${side}">${esc(teamName(g[side]))}</b><span class="label">받은 타순</span>${list.map((pid, i) => `<span><b>${i + 1}번</b> ${esc(P[pid].no)} ${esc(P[pid].name)}</span>`).join('')}<span class="label">교체</span>${playersOf(g[side]).filter((p) => !list.includes(p.pid)).map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)}</span>`).join('') || '<span class="muted">없음</span>'}</div>`; };
@@ -364,7 +455,7 @@ function gameScreen(id) {
 <div><span class="name ta">${esc(teamName(g.a))}${role('a')}</span><span class="num big" data-score="a">${a}</span>${btns('a')}</div>
 <div><span class="name tb">${esc(teamName(g.b))}${role('b')}</span><span class="num big" data-score="b">${b}</span>${btns('b')}</div></div>${hint ? `<span class="note center">${hint}</span>` : ''}</section>`;
   const table = partsTable(g, gr);
-  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
+  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tieBox}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
 }
 
 function subScreen(id, side) {
@@ -540,6 +631,8 @@ ${g.status !== 'ready' ? partsTable(g, gr) : ''}
 }
 
 function standingsTable(gr) {
+  const staged = stagedOf(gr.id);
+  if (staged.some((g) => g.stage !== 'L')) return `${groupTables(gr)}${bracketList(gr)}`;
   const rows = L.standings(teamsOf(gr.id), gamesOf(gr.id));
   if (!rows.length) return '';
   const cols = '32px minmax(0,1fr) 36px 36px 36px 36px 44px';
@@ -588,6 +681,11 @@ function boardScreen() {
   const all = gradeList().flatMap((g) => gamesOf(g.id));
   const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px"><a class="pick row" href="${HOME}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div></div></div>`;
   const d = T().display;
+  const dgr = d && d.mode === 'draw' && (T().grades || {})[d.gid] ? { ...T().grades[d.gid], id: d.gid } : null;
+  if (dgr && drawOrder(dgr)) {
+    const gr = dgr, order = drawOrder(gr), info = P.planInfo(gr.plan, order.length);
+    return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · 추첨`)}<div class="drawbox"><h2>${esc(P.MODES[info.plan.mode])} 추첨</h2>${drawView(gr, order, d.at || 1)}<p class="sub">${esc(info.text)}</p></div></div>`;
+  }
   if (d && d.mode === 'records' && (T().grades || {})[d.gid]) {
     S.gid = d.gid;
     const keep = S.rec; S.rec = { team: '', sort: 'goals', key: null };
@@ -654,6 +752,11 @@ function sheetHtml() {
     return `<div class="sheet" role="dialog" aria-label="같은 득점 확인"><h2>방금 ${esc(teamName(g[s.team]))} 득점이 기록됐습니다.</h2><p class="note" style="font-size:14px">다른 선생님이 이미 올린 득점일 수 있습니다. 한 번 더 올릴까요?</p>
 <button class="btn primary big" data-act="closeSheet">올리지 않기</button><button class="btn" data-act="dupYes">새 득점이 맞음 · 한 번 더 올리기</button></div>`;
   }
+  if (s.type === 'win') {
+    const g = gameOf(s.id); if (!g) return '';
+    return `<div class="sheet" role="dialog" aria-label="승자 고르기"><div><div class="label">${esc(g.label || '')} · ${g.sa} : ${g.sb} 동점</div><h2>어느 팀이 올라가나요?</h2></div>
+${['a', 'b'].map((side) => `<button class="btn big ${side === 'a' ? 'blue' : 'orange'}" data-act="winPick" data-side="${side}">${esc(teamName(g[side]))}</button>`).join('')}${close}</div>`;
+  }
   if (s.type === 'help') return `<div class="sheet help" role="dialog" aria-label="사용 안내"><div class="row between"><h2>휘슬! 간략 사용법</h2><button class="btn sm" style="flex:0 0 auto" data-act="closeSheet">닫기</button></div>
 ${HELP.map(([t, lines], i) => `<section><h3><span class="num">${i + 1}</span>${t}</h3><ul>${lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}
 ${S.store.demo ? '' : `<a class="btn sm" href="${BASE}?demo" target="_blank" rel="noopener">지어낸 대회로 미리 눌러 보기</a>`}<button class="btn primary big" data-act="closeSheet">확인</button></div>`;
@@ -702,6 +805,7 @@ function screenHtml() {
   if (r.name === 'members') return membersScreen();
   if (r.name === 'records') return recordsScreen();
   if (r.name === 'teams' && canTeams()) return teamsScreen();
+  if (r.name === 'plan' && canRules()) return planScreen();
   if (r.name === 'settings') return settingsScreen();
   if (r.name === 'rules' && canRules()) return rulesScreen();
   if (r.name === 'school' && canTeams()) return schoolScreen();
@@ -833,6 +937,58 @@ const actions = {
   },
   async undoDel() { const run = undoBar.run; clearInterval(undoBar.i); undoBar.run = null; document.getElementById('toast').textContent = ''; if (run) await run(); },
   help() { openSheet({ type: 'help' }); },
+  // ----- 대회 편성 -----
+  async planSet(d) {
+    const cur = planOf(grade());
+    const v = d.key === 'third' ? !!d.val : d.val;
+    if (cur[d.key] === v) return null;
+    S.swap = null;
+    return S.store.update(`${gradePath()}/plan`, { [d.key]: v, ...(d.key === 'mode' ? { order: null } : {}) });
+  },
+  async planStep(d) {
+    const cur = planOf(grade()), next = Math.min(Number(d.max), Math.max(Number(d.min), cur[d.key] + Number(d.d)));
+    if (next !== cur[d.key]) await S.store.update(`${gradePath()}/plan`, { [d.key]: next });
+  },
+  async planDraw() { S.swap = null; await S.store.update(`${gradePath()}/plan`, { order: P.shuffle(planTeams(grade().id)) }); if (T().display && T().display.mode === 'draw') await S.store.set(`t/${S.tid}/display`, { mode: 'draw', gid: grade().id, at: S.store.now() }); },
+  async swapTeam(d) {
+    const gr = grade(), order = drawOrder(gr); if (!order || stagedOf(gr.id).length) return null;
+    if (!S.swap) { S.swap = d.team; return render(true); }
+    const a = order.indexOf(S.swap), b = order.indexOf(d.team); S.swap = null;
+    if (a === b) return render(true);
+    [order[a], order[b]] = [order[b], order[a]];
+    return S.store.update(`${gradePath()}/plan`, { order });
+  },
+  drawBoard() { const gr = grade(), on = T().display && T().display.mode === 'draw' && T().display.gid === gr.id; return S.store.set(`t/${S.tid}/display`, on ? null : { mode: 'draw', gid: gr.id, at: S.store.now() }); },
+  async planMake() {
+    const gr = grade(), plan = planOf(gr), ids = planTeams(gr.id);
+    const order = plan.mode === 'league' ? P.shuffle(ids) : drawOrder(gr);
+    if (!order) return toast('먼저 추첨을 해 주세요.');
+    const firstNo = Math.max(0, ...gamesOf(gr.id).map((g) => g.no)) + 1;
+    const games = P.buildGames(plan, order, gr.id, S.store.id, firstNo, L.newGame);
+    await S.store.update(`${gradePath()}/plan`, { ...plan, order, made: true });
+    await S.store.update(`t/${S.tid}/games`, games);
+    S.swap = null; toast(`경기 ${Object.keys(games).length}개를 짰습니다.`);
+  },
+  planSync() { return syncBracket(grade().id).then(() => toast('결선 자리를 다시 채웠습니다.')); },
+  planClearAsk() {
+    const gr = grade(), staged = stagedOf(gr.id), ready = staged.filter((g) => g.status === 'ready');
+    if (!ready.length) return toast('지울 수 있는(시작하지 않은) 편성 경기가 없습니다.');
+    openSheet({ type: 'confirm', title: `편성 경기 ${ready.length}개를 지울까요?`, text: ready.length < staged.length ? `이미 시작했거나 끝난 ${staged.length - ready.length}경기는 남기고, 시작하지 않은 경기만 지웁니다.` : '편성으로 만든 경기를 모두 지우고 방식을 다시 고를 수 있게 합니다. 손으로 추가한 경기는 그대로 둡니다.', yes: '편성 경기 지우기', danger: true, run: 'planClear' });
+  },
+  async planClear() {
+    const gr = grade(), up = {};
+    for (const g of stagedOf(gr.id)) if (g.status === 'ready') { up[`games/${g.id}`] = null; up[`orders/${g.id}`] = null; }
+    await S.store.update(`t/${S.tid}`, up);
+    await S.store.update(`${gradePath()}/plan`, { made: null });
+  },
+  async gExtend(d) { await act(d.id, L.extend); },
+  winAsk(d) { openSheet({ type: 'win', id: d.id }); },
+  async winPick(d) {
+    const id = S.sheet.id, g = gameOf(id); S.sheet = null; render(true);
+    await S.store.update(`t/${S.tid}/games/${id}`, { win: d.side });
+    await S.store.push(`t/${S.tid}/logs/${id}`, { at: S.store.now(), tag: '종료', type: 'info', text: `동점 · ${teamName(g[d.side])} 승리로 정함`, by: uid() });
+    await syncBracket(g.gid);
+  },
   showQR() { openSheet({ type: 'qr' }); },
   async copy(d) { try { await navigator.clipboard.writeText(d.text); toast(d.msg); } catch { toast(d.text); } },
   addGame() { if (Object.keys(teamsOf(grade().id)).length < 2) return toast('팀이 두 팀 이상 있어야 합니다.'); openSheet({ type: 'game' }); },
@@ -862,9 +1018,10 @@ const actions = {
     S.ord.done = true; render(true);
   },
   async saveWhen() { await S.store.update(`t/${S.tid}/games/${S.sheet.id}`, readWhen()); S.sheet = null; render(true); },
-  async delGameGo() { const id = S.sheet.id; location.hash = 'games'; await S.store.update(`t/${S.tid}`, { [`games/${id}`]: null, [`logs/${id}`]: null, [`orders/${id}`]: null }); },
+  async delGameGo() { const id = S.sheet.id, g = gameOf(id); location.hash = 'games'; await S.store.update(`t/${S.tid}`, { [`games/${id}`]: null, [`logs/${id}`]: null, [`orders/${id}`]: null }); if (g && g.stage) await syncBracket(g.gid); },
   gStart(d) {
     const g = gameOf(d.id), gr = T().grades[g.gid];
+    if (P.isOpen(g.a) || P.isOpen(g.b)) return openSheet({ type: 'notice', title: '아직 팀이 정해지지 않았습니다', text: '예선이나 앞 경기가 끝나면 이 자리에 팀이 자동으로 들어갑니다. 끝났는데도 비어 있으면 홈의 "대회 편성"에서 "결선 자리 다시 채우기"를 눌러 주세요. 동점으로 끝난 결선 경기는 연장을 열거나 승자를 골라야 합니다.' });
     const bad = ['a', 'b'].filter((side) => !(gr.format === 'innings' && orderList(d.id, side, g).length)).map((side) => [side, rosterIssues(g[side], gr)]).filter(([, r]) => r.length);
     if (bad.length) return openSheet({ type: 'notice', title: '명단이 설정과 달라 시작할 수 없습니다', text: `${bad.map(([side, r]) => `${teamName(g[side])}: ${r.join(', ')}`).join(' / ')}. 팀 명단에서 선발·후보를 맞추거나, 종목·규칙에서 인원을 바꾼 뒤 시작해 주세요.` });
     return act(d.id, L.start);
@@ -872,7 +1029,7 @@ const actions = {
   gClock(d) { return act(d.id, L.toggleClock); },
   gNext(d) { return act(d.id, L.nextPart); },
   gEndAsk(d) { openSheet({ type: 'confirm', title: '경기를 끝낼까요?', text: '끝낸 경기는 다시 진행할 수 없습니다.', yes: '경기 종료', run: 'gEnd', id: d.id }); },
-  gEnd() { const g = gameOf(S.sheet.id), gr = T().grades[g.gid]; const last = g.cur >= L.partCount(gr) - 1; return act(g.id, L.isTimed(gr) && last ? L.nextPart : L.endGame); },
+  gEnd() { const g = gameOf(S.sheet.id), gr = T().grades[g.gid]; const last = g.cur >= L.partCount(gr, g) - 1; return act(g.id, L.isTimed(gr) && last ? L.nextPart : L.endGame); },
   gPlus(d) {
     const g = gameOf(d.id), gr = T().grades[g.gid], pts = Number(d.pts) || 1;
     const dup = g.last && g.last.team === d.team && g.last.by !== uid() && S.store.now() - g.last.at < L.dupWindow(gr);

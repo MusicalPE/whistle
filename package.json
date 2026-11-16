@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "check": "node tests/check.mjs",
-    "full": "node tests/check.mjs && node --test tests/logic.test.mjs tests/poll.test.mjs && node tests/e2e.mjs",
-    "test": "node --test tests/logic.test.mjs tests/poll.test.mjs",
+    "full": "node tests/check.mjs && node --test tests/logic.test.mjs tests/poll.test.mjs tests/plan.test.mjs && node tests/e2e.mjs",
+    "test": "node --test tests/logic.test.mjs tests/poll.test.mjs tests/plan.test.mjs",
     "e2e": "node tests/e2e.mjs"
   }
 }
