@@ -137,7 +137,7 @@ function qrSvg(url) {
 const helpBtn = (cls = '') => `<button class="helpbtn ${cls}" data-act="help"><span class="q" aria-hidden="true">?</span>사용 안내</button>`;
 const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
-  ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄워 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
+  ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄워 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
   ['학생 화면과 전광판', ['"경기" 탭의 학생용 QR을 크게 띄워 보여 줍니다. 학생은 로그인 없이 보기만 합니다.', '학생 화면은 몇 초마다 새로 읽어서 5초쯤 늦게 바뀝니다.', '"전광판 모드"를 TV나 전자칠판에 띄우면 큰 점수판이 됩니다.', 'QR과 주소는 우리 학교 학생과 학부모에게만 공유해 주세요.']],
   ['함께 심판 보기', ['홈 오른쪽 위 "함께하는 선생님 · 초대"에서 초대 QR이나 코드를 보냅니다.', '선생님마다 경기 진행만, 팀 명단과 일정까지, 모든 설정까지 가운데 권한을 정합니다.']],
@@ -261,7 +261,7 @@ function gameCard(g, href) {
   const st = live ? `<span class="pill"><span class="dot"></span>${statusText(g)}</span>` : `<span>${statusText(g)}${when ? ` · ${esc(when)}` : ''}</span>`;
   const gr = T().grades[g.gid];
   const part = live ? ` · ${L.partName(gr, g.cur, g.half)}` : '';
-  const inner = `<div class="row between label"><span>${g.no}경기${g.label ? ` · ${esc(g.label)}` : ''}${part}</span>${st}</div><div class="vs"><span class="ta">${esc(teamName(g.a))}</span><span class="num sc">${scoreText(g)}</span><span class="tb right">${esc(teamName(g.b))}</span></div>`;
+  const inner = `<div class="row between label"><span>${g.no}경기${g.label ? ` · ${esc(g.label)}${g.rec ? ` (${esc(g.rec)})` : ''}` : ''}${part}</span>${st}</div><div class="vs"><span class="ta">${esc(teamName(g.a))}</span><span class="num sc">${scoreText(g)}</span><span class="tb right">${esc(teamName(g.b))}</span></div>`;
   return href ? `<a class="card game${live ? ' live' : ''}" href="${href}">${inner}</a>` : `<div class="card game${live ? ' live' : ''}">${inner}</div>`;
 }
 
@@ -324,6 +324,7 @@ function drawView(gr, order, at) {
     const byes = order.filter((t) => !playing.has(t));
     return `<div class="dcup">${inFirst.map((g) => `<div class="dpair"><span class="label">${esc(g.label)}</span>${chip(g.a)}<span class="muted">vs</span>${chip(g.b)}</div>`).join('')}${byes.length ? `<div class="dpair"><span class="label">부전승</span>${byes.map((t) => chip(t)).join('')}</div>` : ''}</div>`;
   }
+  if (plan.mode === 'swiss') return `<div class="dcup">${Array.from({ length: Math.floor(n / 2) }, (_, i) => `<div class="dpair"><span class="label">스위스 1R</span>${chip(order[i * 2])}<span class="muted">vs</span>${chip(order[i * 2 + 1])}</div>`).join('')}</div>`;
   return `<div class="dcup"><div class="dpair">${order.map((t) => chip(t)).join('')}</div></div>`;
 }
 
@@ -335,6 +336,16 @@ function groupTables(gr) {
     const t = P.groupTable(games, teams, grp), name = t.games[0].label;
     return `<div class="stack" style="gap:6px"><h2 class="h2">${esc(name)} 순위 <span class="small muted" style="font-weight:500">· ${t.done ? '예선 끝' : '끝난 경기 기준'}</span></h2><div class="card tbl"><div class="tr th" style="grid-template-columns:${cols}"><span>순위</span><span class="l">팀</span><span>경기</span><span>승</span><span>무</span><span>패</span><span>승점</span></div>${t.rows.map((r) => `<div class="tr" style="grid-template-columns:${cols}"><b class="num">${r.rank}</b><b class="l">${esc(r.name)}</b><span>${r.p}</span><span>${r.w}</span><span>${r.d}</span><span>${r.l}</span><b>${r.pts}</b></div>`).join('')}</div></div>`;
   }).join('');
+}
+
+function swissBox(gr) {
+  const games = gamesOf(gr.id);
+  if (!games.some((g) => g.stage === 'S')) return '';
+  const { rows, W } = P.swissTable(games, teamsOf(gr.id));
+  const round = Math.max(...games.filter((g) => g.stage === 'S').map((g) => g.round));
+  const cols = 'minmax(0,1fr) 40px 40px 76px', names = { in: '결선 진출', out: '탈락', play: '진행 중' };
+  return `<div class="stack" style="gap:6px"><h2 class="h2">스위스 순위 <span class="small muted" style="font-weight:500">· ${W}승 진출 · ${W}패 탈락 · ${round}라운드</span></h2><div class="card tbl"><div class="tr th" style="grid-template-columns:${cols}"><span class="l">팀</span><span>승</span><span>패</span><span>상태</span></div>${rows.map((r) => `<div class="tr" style="grid-template-columns:${cols}"><b class="l${r.state === 'out' ? ' muted' : ''}">${esc(r.name)}</b><span>${r.w}</span><span>${r.l}</span><span class="${r.state === 'in' ? 'bold' : 'muted'}">${names[r.state]}</span></div>`).join('')}</div>
+${games.some((g) => g.stage === 'K') ? '' : '<span class="small muted">스위스가 끝나면 결선 대진을 추첨합니다. 무패로 올라온 두 팀은 결승에서만 만나게 양 끝에 놓입니다.</span>'}</div>`;
 }
 
 function bracketList(gr) {
@@ -353,9 +364,9 @@ function planScreen() {
   let body;
   if (staged.length) {
     const started = staged.some((g) => g.status !== 'ready');
-    body = `<div class="card p stack"><b>${esc(P.MODES[plan.mode])}</b><span class="note">${esc(info.text)}</span><span class="small muted">편성된 경기 ${staged.length}개는 "경기" 탭에 있습니다. 예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다.</span>
-<div class="grid2">${order && plan.mode !== 'league' ? boardBtn : ''}<button class="btn sm" data-act="planSync">결선 자리 다시 채우기</button></div></div>
-${groupTables(gr)}${bracketList(gr)}
+    body = `<div class="card p stack"><b>${esc(P.MODES[plan.mode])}</b><span class="note">${esc(info.text)}</span><span class="small muted">편성된 경기 ${staged.length}개는 "경기" 탭에 있습니다. ${plan.mode === 'swiss' ? '한 라운드가 모두 끝나면 승패가 같은 팀끼리 추첨해 다음 라운드를 자동으로 짭니다. 이미 만난 팀은 되도록 피합니다.' : '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다.'}</span>
+<div class="grid2">${order && plan.mode !== 'league' ? boardBtn : ''}<button class="btn sm" data-act="planSync">${plan.mode === 'swiss' ? '다음 라운드 · 결선 짜기' : '결선 자리 다시 채우기'}</button></div></div>
+${groupTables(gr)}${swissBox(gr)}${bracketList(gr)}
 <button class="btn plain" data-act="planClearAsk">${started ? '시작하지 않은 편성 경기 지우기' : '편성 지우고 다시 짜기'}</button>`;
   } else {
     const stepper = (key, val, unit, min, max, label) => `<div class="stepper"><button data-act="planStep" data-key="${key}" data-d="-1" data-min="${min}" data-max="${max}" aria-label="${label} 줄이기">−</button><b>${val}${unit}</b><button data-act="planStep" data-key="${key}" data-d="1" data-min="${min}" data-max="${max}" aria-label="${label} 늘리기">+</button></div>`;
@@ -377,7 +388,16 @@ ${gamesOf(gr.id).length ? `<p class="note">지금 있는 경기 ${gamesOf(gr.id)
 
 // 예선이나 앞 경기 결과에 맞춰 결선 자리의 팀을 채운다(되돌려야 하면 되돌린다).
 async function syncBracket(gid) {
-  const games = gamesOf(gid);
+  let games = gamesOf(gid);
+  const gr = (T().grades || {})[gid];
+  // 스위스: 라운드가 끝났으면 다음 라운드(또는 결선)를 짠다. 경기를 새로 만드는 일이라 팀 명단 권한이 있어야 한다.
+  if (gr && canTeams() && games.some((g) => g.stage === 'S') && !syncBracket.busy) {
+    syncBracket.busy = true;
+    try {
+      const more = P.swissNext(games, teamsOf(gid), P.normPlan(gr.plan, Object.keys(teamsOf(gid)).length), gid, S.store.id, Math.max(0, ...games.map((g) => g.no)) + 1, L.newGame);
+      if (Object.keys(more).length) { await S.store.update(`t/${S.tid}/games`, more); toast(Object.values(more)[0].stage === 'S' ? `${Object.values(more)[0].label} 경기를 짰습니다.` : '스위스가 끝나 결선 대진을 추첨했습니다.'); games = gamesOf(gid); }
+    } catch (e) { /* 다음 기회에 다시 */ } finally { syncBracket.busy = false; }
+  }
   if (!games.some((g) => g.stage === 'K')) return;
   const up = {}, res = P.resolve(games, teamsOf(gid));
   for (const [id, sides] of Object.entries(res)) for (const [s, v] of Object.entries(sides)) up[`${id}/${s}`] = v;
@@ -412,8 +432,8 @@ function gameScreen(id) {
   const head = `<header class="bar"><a class="back" href="#games">‹ 경기</a><b style="font-size:15px">${g.no}경기${g.label ? ` · ${esc(g.label)}` : ''}${g.status === 'live' ? ` · ${L.partName(gr, g.cur, g.half)}` : ''}</b><span class="pill">${g.status === 'live' ? '<span class="dot"></span>' : ''}${statusText(g)}</span></header>`;
   const logs = logsOf(id);
   const logBox = logs.length ? `<section class="pad stack" style="gap:4px;margin-top:12px"><h2 class="label">경기 기록 · 득점 기록을 누르면 넣은 선수를 고칠 수 있습니다</h2>${logs.slice(0, g.status === 'done' ? 40 : 6).map(L.usesPicker(gr) ? teacherLogRow(g.id) : logRow).join('')}</section>` : '';
-  const tied = g.status === 'done' && g.stage === 'K' && g.sa === g.sb;
-  const tieBox = tied ? `<section class="pad" style="margin-top:12px"><div class="card p stack" style="border-color:#C2410C;background:#FFF4E5"><b>${g.win ? `동점 · ${esc(teamName(g[g.win]))} 승리로 정했습니다` : '동점입니다. 결선은 승자가 있어야 다음 경기가 정해집니다.'}</b>
+  const tied = g.status === 'done' && (g.stage === 'K' || g.stage === 'S') && g.sa === g.sb;
+  const tieBox = tied ? `<section class="pad" style="margin-top:12px"><div class="card p stack" style="border-color:#C2410C;background:#FFF4E5"><b>${g.win ? `동점 · ${esc(teamName(g[g.win]))} 승리로 정했습니다` : (g.stage === 'S' ? '동점입니다. 스위스는 승패가 있어야 다음 라운드를 짤 수 있습니다.' : '동점입니다. 결선은 승자가 있어야 다음 경기가 정해집니다.')}</b>
 <div class="grid2"><button class="btn sm primary" data-act="gExtend" data-id="${g.id}">연장 열기</button><button class="btn sm" data-act="winAsk" data-id="${g.id}">${g.win ? '승자 바꾸기' : '승자 고르기'}</button></div><span class="small muted">연장은 시간제 종목은 한 구간의 절반, 그 밖의 종목은 한 세트·한 회를 더 합니다. 승부차기 등으로 정했다면 승자를 골라 주세요.</span></div></section>` : '';
   if (g.status === 'ready') {
     const inn = gr.format === 'innings';
@@ -632,7 +652,7 @@ ${g.status !== 'ready' ? partsTable(g, gr) : ''}
 
 function standingsTable(gr) {
   const staged = stagedOf(gr.id);
-  if (staged.some((g) => g.stage !== 'L')) return `${groupTables(gr)}${bracketList(gr)}`;
+  if (staged.some((g) => g.stage !== 'L')) return `${groupTables(gr)}${swissBox(gr)}${bracketList(gr)}`;
   const rows = L.standings(teamsOf(gr.id), gamesOf(gr.id));
   if (!rows.length) return '';
   const cols = '32px minmax(0,1fr) 36px 36px 36px 36px 44px';
@@ -969,7 +989,7 @@ const actions = {
     await S.store.update(`t/${S.tid}/games`, games);
     S.swap = null; toast(`경기 ${Object.keys(games).length}개를 짰습니다.`);
   },
-  planSync() { return syncBracket(grade().id).then(() => toast('결선 자리를 다시 채웠습니다.')); },
+  async planSync() { const n = gamesOf(grade().id).length; await syncBracket(grade().id); if (gamesOf(grade().id).length === n) toast(planOf(grade()).mode === 'swiss' ? '아직 끝나지 않은 경기가 있거나 더 짤 경기가 없습니다.' : '결선 자리를 다시 채웠습니다.'); },
   planClearAsk() {
     const gr = grade(), staged = stagedOf(gr.id), ready = staged.filter((g) => g.status === 'ready');
     if (!ready.length) return toast('지울 수 있는(시작하지 않은) 편성 경기가 없습니다.');
@@ -1251,7 +1271,7 @@ async function main() {
   document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (el && changes[el.dataset.change]) changes[el.dataset.change](el); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.enter && actions[e.target.dataset.enter]) { e.preventDefault(); actions[e.target.dataset.enter]({}); } });
   document.addEventListener('focusout', () => setTimeout(() => { if (S.dirty) render(); }, 200));
-  window.addEventListener('hashchange', () => { S.sheet = null; window.scrollTo(0, 0); render(true); });
+  window.addEventListener('hashchange', () => { S.sheet = null; window.scrollTo(0, 0); render(true); if (MODE === 'teacher' && S.tid && T().meta && grade()) syncBracket(grade().id); });
   try { S.store = await createStore(MODE); } catch (e) { document.getElementById('app').innerHTML = '<div class="app"><p class="note pad mt">연결하지 못했습니다. 인터넷을 확인하고 다시 열어 주세요.</p></div>'; return; }
   setInterval(tick, 250);
   if (MODE === 'teacher') { S.store.onAuth(afterAuth); await afterAuth(); } else { openT(params.get('v') || params.get('b') || params.get('o')); render(true); }

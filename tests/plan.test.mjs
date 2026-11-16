@@ -113,3 +113,63 @@ test('연장: 동점으로 끝난 경기에 구간을 하나 더 붙여 다시 �
   L.extend(t, { ...tg, detail: false }, ctx(2));
   assert.deepEqual([t.status, t.cur, t.half, L.partName(tg, t.cur, t.half)], ['live', tg.innings, 0, `${tg.innings + 1}회 초`]);
 });
+
+test('스위스 + 결선: 승패가 같은 팀끼리 추첨, 승수를 채우면 진출·같은 수만큼 지면 탈락, 결선은 무패 두 팀을 양 끝에', () => {
+  assert.match(P.planInfo({ mode: 'swiss' }, 16).text, /16팀 스위스 33경기\(3승 진출 · 3패 탈락\) → 상위 8팀 8강부터 토너먼트 7경기/);
+  assert.match(P.planInfo({ mode: 'swiss' }, 8).text, /8팀 스위스 10경기\(2승 진출 · 2패 탈락\) → 상위 4팀 준결승부터 토너먼트 3경기/);
+  assert.ok(P.planInfo({ mode: 'swiss' }, 12).problems.length, '12팀은 짤 수 없다');
+  for (const n of [8, 16]) for (let seed = 1; seed <= 25; seed++) {
+    let x = seed * 7919; const rnd = () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; };
+    const teams = teamsOf(n), W = P.swissWins(n); let k = 0; const id = () => `g${++k}`;
+    const games = Object.entries(P.buildGames({ mode: 'swiss', third: true }, Object.keys(teams), 'gr', id, 1, L.newGame)).map(([gid, g]) => ({ id: gid, ...g }));
+    assert.equal(games.length, n / 2);
+    let rounds = 0;
+    for (;;) {
+      // 지금 라운드를 끝낸다: 승패는 무작위, 가끔 동점 뒤 승자 고르기
+      for (const g of games.filter((y) => y.stage === 'S' && y.status !== 'done')) { if (rnd() < 0.2) { end(g, 1, 1); g.win = rnd() < 0.5 ? 'a' : 'b'; } else if (rnd() < 0.5) end(g, 2, 1); else end(g, 0, 3); }
+      const before = [...games];
+      const more = P.swissNext(games, teams, { third: true }, 'gr', id, games.length + 1, L.newGame, rnd);
+      const list = Object.entries(more).map(([gid, g]) => ({ id: gid, ...g }));
+      assert.ok(list.length, '라운드가 끝나면 다음 경기가 나와야 함');
+      games.push(...list);
+      if (list[0].stage === 'K') break;
+      rounds++;
+      const rows = Object.fromEntries(P.swissTable(before, teams).rows.map((r) => [r.id, r]));
+      for (const g of list) {
+        assert.equal(`${rows[g.a].w}-${rows[g.a].l}`, `${rows[g.b].w}-${rows[g.b].l}`, '승패가 같은 팀끼리만 만난다');
+        assert.equal(g.rec, `${rows[g.a].w}승 ${rows[g.a].l}패`);
+        assert.ok(rows[g.a].w < W && rows[g.a].l < W, '진출·탈락이 정해진 팀은 더 뛰지 않는다');
+      }
+    }
+    const S = games.filter((g) => g.stage === 'S'), K = games.filter((g) => g.stage === 'K');
+    assert.equal(S.length, n === 16 ? 33 : 10, `${n}팀 스위스 경기 수`);
+    assert.equal(rounds, n === 16 ? 4 : 2, '1라운드 뒤 라운드 수');
+    const { rows } = P.swissTable(games, teams);
+    const inn = rows.filter((r) => r.state === 'in'), out = rows.filter((r) => r.state === 'out');
+    assert.deepEqual([inn.length, out.length, rows.length], [n / 2, n / 2, n]);
+    assert.ok(inn.every((r) => r.w === W) && out.every((r) => r.l === W));
+    assert.equal(K.length, n / 2, '결선 경기 수(3·4위전 포함)');
+    const first = K.filter((g) => g.round === n / 2), unbeaten = inn.filter((r) => r.l === 0).map((r) => r.id), last = inn.filter((r) => r.l === W - 1).map((r) => r.id);
+    assert.equal(unbeaten.length, 2);
+    assert.equal(new Set(first.flatMap((g) => [g.a, g.b])).size, n / 2, '진출 팀이 모두 한 번씩');
+    assert.deepEqual([first[0].a, first.at(-1).b].sort(), [...unbeaten].sort(), '무패 두 팀은 대진표 양 끝');
+    assert.ok(last.includes(first[0].b) && last.includes(first.at(-1).a), '무패 팀의 상대는 마지막에 올라온 팀 가운데 추첨');
+    assert.deepEqual(P.swissNext(games, teams, {}, 'gr', id, 99, L.newGame, rnd), {}, '결선을 짠 뒤에는 더 만들지 않는다');
+    // 이미 만난 팀과 다시 만나는 일은 드물어야 한다
+    const keys = S.map(pairKey);
+    assert.ok(keys.length - new Set(keys).size <= (n === 16 ? 3 : 2), `다시 만난 경기 ${keys.length - new Set(keys).size}`);
+  }
+});
+
+test('스위스: 라운드가 끝나기 전이나 동점 승자를 고르기 전에는 다음 라운드를 짜지 않는다', () => {
+  const teams = teamsOf(8); let k = 0; const id = () => `g${++k}`;
+  const games = Object.entries(P.buildGames({ mode: 'swiss' }, Object.keys(teams), 'gr', id, 1, L.newGame)).map(([gid, g]) => ({ id: gid, ...g }));
+  games.slice(0, 3).forEach((g) => end(g, 1, 0));
+  assert.deepEqual(P.swissNext(games, teams, {}, 'gr', id, 5, L.newGame), {});
+  end(games[3], 2, 2);
+  assert.deepEqual(P.swissNext(games, teams, {}, 'gr', id, 5, L.newGame), {});
+  games[3].win = 'b';
+  const more = Object.values(P.swissNext(games, teams, {}, 'gr', id, 5, L.newGame));
+  assert.deepEqual([more.length, more[0].label, more.map((g) => g.rec).sort().join()], [4, '스위스 2R', '0승 1패,0승 1패,1승 0패,1승 0패']);
+  assert.deepEqual(more.map((g) => g.no), [5, 6, 7, 8]);
+});

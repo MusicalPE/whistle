@@ -3,11 +3,12 @@
 // 화면도 저장소도 모르는 순수 계산만 둔다.
 import { standings } from './logic.js';
 
-export const MODES = { league: '풀리그', cup: '토너먼트', groups: '조별 예선 + 결선', ring: '원형 예선 + 결선' };
+export const MODES = { league: '풀리그', cup: '토너먼트', groups: '조별 예선 + 결선', ring: '원형 예선 + 결선', swiss: '스위스 + 결선' };
 export const MODE_NOTES = {
   league: '모든 팀이 한 번씩 만납니다. 순위표로 순위를 가립니다.',
   cup: '지면 탈락합니다. 팀 수가 4, 8처럼 딱 맞지 않으면 부전승이 생깁니다.',
   groups: '조를 나눠 조 안에서 한 번씩 만난 뒤, 조별 상위 팀이 결선 토너먼트를 합니다.',
+  swiss: '8팀 또는 16팀일 때 씁니다. 승패가 같은 팀끼리 추첨으로 만나고, 정해진 승수를 먼저 채우면 결선에 오르고 같은 수만큼 지면 탈락합니다. 다음 라운드는 앞 라운드가 끝나면 자동으로 짜집니다.',
   ring: '팀이 적을 때 좋습니다. 원으로 둘러앉아 양옆 팀과만 한 번씩(팀마다 2경기) 하고, 상위 팀이 결선을 합니다.',
 };
 const GROUP_NAMES = 'ABCDEFGH';
@@ -16,6 +17,8 @@ export const roundName = (teams) => (teams === 2 ? '결승' : teams === 4 ? '준
 // 아직 정해지지 않은 팀 자리는 "?글"로 적는다. 화면에는 ? 뒤의 글이 그대로 팀 이름처럼 보인다.
 export const isOpen = (id) => typeof id === 'string' && id.startsWith('?');
 export const openName = (id) => id.slice(1);
+// 스위스: 8팀은 2승 진출·2패 탈락, 16팀은 3승 진출·3패 탈락. 그 밖의 팀 수는 승패 묶음이 홀수가 되어 짤 수 없다.
+export const swissWins = (n) => (n === 16 ? 3 : n === 8 ? 2 : 0);
 export const winnerOf = (g) => (g.status !== 'done' ? '' : g.sa > g.sb ? 'a' : g.sb > g.sa ? 'b' : g.win === 'a' || g.win === 'b' ? g.win : '');
 
 export function shuffle(list, rnd = Math.random) {
@@ -97,8 +100,9 @@ function entrants(plan, order) {
 export function planInfo(planIn, n) {
   const plan = normPlan(planIn, n);
   const sizes = plan.mode === 'groups' ? Array.from({ length: plan.groups }, (_, i) => Math.floor(n / plan.groups) + (i < n % plan.groups ? 1 : 0)) : [n];
-  const prelim = plan.mode === 'league' ? (n * (n - 1)) / 2 : plan.mode === 'groups' ? sizes.reduce((s, k) => s + (k * (k - 1)) / 2, 0) : plan.mode === 'ring' ? (n < 3 ? (n === 2 ? 1 : 0) : n) : 0;
-  const ent = plan.mode === 'cup' ? n : plan.mode === 'groups' ? plan.groups * plan.adv : plan.mode === 'ring' ? plan.adv : 0;
+  const W = swissWins(n);
+  const prelim = plan.mode === 'swiss' ? (n === 16 ? 33 : n === 8 ? 10 : 0) : plan.mode === 'league' ? (n * (n - 1)) / 2 : plan.mode === 'groups' ? sizes.reduce((s, k) => s + (k * (k - 1)) / 2, 0) : plan.mode === 'ring' ? (n < 3 ? (n === 2 ? 1 : 0) : n) : 0;
+  const ent = plan.mode === 'swiss' ? (W ? n / 2 : 0) : plan.mode === 'cup' ? n : plan.mode === 'groups' ? plan.groups * plan.adv : plan.mode === 'ring' ? plan.adv : 0;
   const third = plan.third && ent >= 4;
   const ko = ent ? ent - 1 + (third ? 1 : 0) : 0;
   const problems = [];
@@ -107,11 +111,13 @@ export function planInfo(planIn, n) {
   if (plan.mode === 'groups' && plan.adv > Math.min(...sizes)) problems.push('조별 진출 팀 수가 조의 팀 수보다 많습니다.');
   if (plan.mode === 'ring' && n < 3) problems.push('원형 예선은 세 팀 이상일 때 쓸 수 있습니다.');
   if (plan.mode === 'ring' && plan.adv >= n) problems.push('결선에 오르는 팀 수가 전체 팀 수보다 적어야 합니다.');
+  if (plan.mode === 'swiss' && !W) problems.push('스위스 방식은 8팀(2승 진출 · 2패 탈락) 또는 16팀(3승 진출 · 3패 탈락)일 때 쓸 수 있습니다.');
   const size = ent ? pow2(ent) : 0;
   const bits = [];
   if (plan.mode === 'league') bits.push(`${n}팀 풀리그 ${prelim}경기`);
   if (plan.mode === 'groups') bits.push(`${plan.groups}개 조(${[...new Set(sizes)].sort((a, b) => a - b).join('~')}팀씩) 예선 ${prelim}경기`);
   if (plan.mode === 'ring') bits.push(`${n}팀 원형 예선 ${prelim}경기(팀마다 2경기)`);
+  if (plan.mode === 'swiss') bits.push(`${n}팀 스위스 ${prelim}경기(${W}승 진출 · ${W}패 탈락)`);
   if (ent) bits.push(`${plan.mode === 'cup' ? `${n}팀` : `상위 ${ent}팀`} ${roundName(size)}부터 토너먼트 ${ko}경기${size > ent ? ` · 부전승 ${size - ent}팀` : ''}${third ? ' · 3·4위전 포함' : ''}`);
   return { plan, sizes, prelim, ent, ko, total: prelim + ko, size, third, problems, text: bits.join(' → ') };
 }
@@ -125,7 +131,7 @@ export function buildGames(planIn, order, gid, id, firstNo = 1, newGame) {
   let no = firstNo;
   const add = (a, b, extra) => { const key = id(); out[key] = { ...newGame(gid, no++, a, b), ...extra }; return key; };
 
-  if (plan.mode !== 'cup') {
+  if (plan.mode !== 'cup' && plan.mode !== 'swiss') {
     const gs = groupsOf(plan, order);
     const rounds = gs.map((ids) => (plan.mode === 'ring' ? ringPairs(ids) : roundRobin(ids)));
     const most = Math.max(...rounds.map((r) => r.length));
@@ -133,12 +139,21 @@ export function buildGames(planIn, order, gid, id, firstNo = 1, newGame) {
   }
   if (!info.ent) return out;
 
-  // 결선: 자리(시드)를 대진표에 놓고, 한쪽이 비면 부전승으로 다음 라운드에 바로 올린다.
+  if (plan.mode === 'swiss') {
+    for (let i = 0; i < order.length; i += 2) add(order[i], order[i + 1], { stage: 'S', round: 1, label: '스위스 1R', rec: '0승 0패' });
+    return out;
+  }
   const ent = entrants(plan, order);
-  let level = seedOrder(info.size).map((s) => ent[s - 1] || null);
+  knock(seedOrder(info.size).map((sd) => ent[sd - 1] || null), plan.third, add);
+  return out;
+}
+
+// 결선 대진을 만든다. level 은 대진표 자리 순서대로 놓은 목록(빈 자리는 null → 부전승).
+function knock(first, third, add) {
+  let level = first;
   const ref = (e) => (e.team ? e.team : `?${e.text}`);
   const src = (e) => (e.team ? null : e.game ? { game: e.game, take: 'win' } : { grp: e.grp, rank: e.rank });
-  let teams = info.size, semis = [];
+  let teams = level.length; const semis = [];
   while (level.length > 1) {
     const next = [], made = [];
     for (let i = 0; i < level.length; i += 2) {
@@ -146,18 +161,77 @@ export function buildGames(planIn, order, gid, id, firstNo = 1, newGame) {
       if (!x || !y) { next.push(x || y); continue; }
       made.push({ x, y, at: next.length }); next.push(null);
     }
-    if (teams === 2 && plan.third && semis.length === 2) {
+    if (teams === 2 && third && semis.length === 2) {
       add(`?${semis[0].name} 패자`, `?${semis[1].name} 패자`, { stage: 'K', round: 3, label: '3·4위전', src: { a: { game: semis[0].key, take: 'lose' }, b: { game: semis[1].key, take: 'lose' } } });
     }
     made.forEach((m, k) => {
       const name = `${roundName(teams)}${made.length > 1 ? ` ${k + 1}` : ''}`;
-      const s = { a: src(m.x), b: src(m.y) };
-      const key = add(ref(m.x), ref(m.y), { stage: 'K', round: teams, label: name, ...(s.a || s.b ? { src: { ...(s.a ? { a: s.a } : {}), ...(s.b ? { b: s.b } : {}) } } : {}) });
+      const sc = { a: src(m.x), b: src(m.y) };
+      const key = add(ref(m.x), ref(m.y), { stage: 'K', round: teams, label: name, ...(sc.a || sc.b ? { src: { ...(sc.a ? { a: sc.a } : {}), ...(sc.b ? { b: sc.b } : {}) } } : {}) });
       next[m.at] = { game: key, text: `${name} 승자`, name };
       if (teams === 4) semis.push({ key, name });
     });
     level = next; teams /= 2;
   }
+}
+
+// 스위스 순위: 팀별 승패와 상태(in 결선 진출, out 탈락, play 진행 중).
+export function swissTable(games, teams) {
+  const S = games.filter((g) => g.stage === 'S');
+  const ids = [...new Set(S.flatMap((g) => [g.a, g.b]))].filter((t) => teams[t]);
+  const W = swissWins(ids.length);
+  const rows = Object.fromEntries(ids.map((t) => [t, { id: t, name: teams[t].name, w: 0, l: 0, at: 0 }]));
+  for (const g of [...S].sort((x, y) => x.round - y.round)) {
+    const w = winnerOf(g); if (!w || !rows[g.a] || !rows[g.b]) continue;
+    const win = rows[g[w]], lose = rows[g[w === 'a' ? 'b' : 'a']];
+    win.w++; lose.l++;
+    if (win.w === W) win.at = g.round;
+    if (lose.l === W) lose.at = g.round;
+  }
+  const list = Object.values(rows);
+  for (const r of list) r.state = W && r.w >= W ? 'in' : W && r.l >= W ? 'out' : 'play';
+  const rank = { in: 0, play: 1, out: 2 };
+  list.sort((x, y) => rank[x.state] - rank[y.state] || (x.state === 'out' ? y.w - x.w || y.at - x.at : x.l - y.l || y.w - x.w || x.at - y.at) || x.name.localeCompare(y.name, 'ko'));
+  return { rows: list, W };
+}
+
+// 스위스의 다음 일을 짠다: 지금 라운드가 모두 끝났으면 다음 라운드, 스위스가 끝났으면 결선 대진.
+// 결선은 무패로 올라온 두 팀을 양 끝에 두고(결승에서만 만남) 마지막 라운드에 올라온 팀 가운데 추첨한 팀과 붙이며, 남은 팀은 추첨으로 놓는다.
+export function swissNext(games, teams, plan, gid, id, firstNo, newGame, rnd = Math.random) {
+  const S = games.filter((g) => g.stage === 'S');
+  if (!S.length || games.some((g) => g.stage === 'K')) return {};
+  const round = Math.max(...S.map((g) => g.round));
+  if (!S.filter((g) => g.round === round).every((g) => winnerOf(g))) return {};
+  const { rows, W } = swissTable(games, teams);
+  if (!W) return {};
+  const out = {}; let no = firstNo;
+  const add = (a, b, extra) => { const key = id(); out[key] = { ...newGame(gid, no++, a, b), ...extra }; return key; };
+  const playing = rows.filter((r) => r.state === 'play');
+  if (playing.length) {
+    const met = new Set(S.map((g) => [g.a, g.b].sort().join('|')));
+    const groups = {};
+    for (const r of playing) (groups[`${r.w}-${r.l}`] = groups[`${r.w}-${r.l}`] || []).push(r);
+    for (const key of Object.keys(groups).sort((x, y) => Number(y.split('-')[0]) - Number(x.split('-')[0]))) {
+      // 이미 만난 팀끼리 다시 만나는 일이 가장 적은 추첨을 고른다.
+      let best = null, bestBad = Infinity;
+      for (let k = 0; k < 60 && bestBad; k++) {
+        const o = shuffle(groups[key], rnd); let bad = 0;
+        for (let i = 0; i + 1 < o.length; i += 2) if (met.has([o[i].id, o[i + 1].id].sort().join('|'))) bad++;
+        if (bad < bestBad) { best = o; bestBad = bad; }
+      }
+      const [w, l] = key.split('-');
+      for (let i = 0; i + 1 < best.length; i += 2) add(best[i].id, best[i + 1].id, { stage: 'S', round: round + 1, label: `스위스 ${round + 1}R`, rec: `${w}승 ${l}패` });
+    }
+    return out;
+  }
+  const Q = rows.filter((r) => r.state === 'in');
+  const top = shuffle(Q.filter((r) => r.l === 0), rnd), low = shuffle(Q.filter((r) => r.l === W - 1), rnd);
+  let level;
+  if (top.length === 2 && low.length >= 2 && (Q.length === 4 || Q.length === 8)) {
+    const rest = shuffle(Q.filter((r) => !top.includes(r) && r !== low[0] && r !== low[1]), rnd);
+    level = [top[0], low[0], ...rest, low[1], top[1]];
+  } else level = shuffle(Q, rnd);
+  knock(level.map((r) => ({ team: r.id })), plan.third, add);
   return out;
 }
 

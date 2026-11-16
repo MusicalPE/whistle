@@ -718,6 +718,73 @@ try {
     await t.waitForFunction(() => /지울 수 있는/.test(document.getElementById('toast').textContent));
   });
 
+  await step('대회 편성: 스위스 + 결선 (8팀, 라운드마다 자동 추첨, 동점은 승자 고르기, 결선 추첨)', async () => {
+    await addGrade('스위스반', 'futsal');
+    await t.goto(`${base}#teams`);
+    await t.waitForSelector('text=+ 팀 추가');
+    for (const n of ['하나', '두리', '세찬', '네온', '다솜', '여울', '일곱', '여덟']) await addTeam(n, []);
+    await t.goto(`${base}#plan`);
+    await btn(t, '스위스 + 결선').click();
+    await t.waitForSelector('text=8팀 스위스 10경기(2승 진출 · 2패 탈락) → 상위 4팀 준결승부터 토너먼트 3경기');
+    await btn(t, '추첨하기').click();
+    await t.waitForSelector('.dpair .dteam');
+    assert.equal(await t.locator('.dpair').count(), 4);
+    await shot(t, '43-swiss-draw');
+    await btn(t, '이대로 경기 13개 짜기').click();
+    await t.waitForSelector('text=스위스 순위');
+    const cards = () => t.locator('a.game:not(.other)');
+    const finish = async (i, a, bb, pick) => {
+      await t.goto(`${base}#games`);
+      await cards().nth(i).click();
+      await btn(t, '경기 시작').click();
+      await t.waitForSelector('[data-score="a"]');
+      for (let k = 0; k < a; k++) await t.locator('[data-act="gPlus"][data-team="a"]').click();
+      for (let k = 0; k < bb; k++) await t.locator('[data-act="gPlus"][data-team="b"]').click();
+      await t.waitForFunction(([x, y]) => document.querySelector('[data-score="a"]').textContent === String(x) && document.querySelector('[data-score="b"]').textContent === String(y), [a, bb]);
+      await btn(t, '전반 끝내기').click();
+      await btn(t, '경기 종료').click();
+      await sbtn(t, '경기 종료').click();
+      await t.waitForFunction(() => /경기 종료/.test(document.body.innerText) && !document.querySelector('[data-act="gPlus"]'));
+      if (pick) {
+        await t.waitForSelector('text=스위스는 승패가 있어야 다음 라운드를 짤 수 있습니다');
+        await btn(t, '승자 고르기').click();
+        await t.locator('#sheet [data-act="winPick"][data-side="b"]').click();
+        await t.waitForSelector('text=승리로 정했습니다');
+      }
+    };
+    await t.goto(`${base}#games`);
+    assert.equal(await cards().count(), 4, '처음에는 1라운드 4경기만');
+    for (let i = 0; i < 3; i++) await finish(i, 1, 0);
+    await t.goto(`${base}#games`);
+    assert.equal(await cards().count(), 4, '라운드가 다 끝나기 전에는 다음 라운드가 없다');
+    await finish(3, 1, 1, true);
+    await t.goto(`${base}#games`);
+    await t.waitForFunction(() => document.querySelectorAll('a.game:not(.other)').length === 8);
+    assert.match(await cards().nth(4).innerText(), /스위스 2R \(1승 0패\)/);
+    assert.match(await cards().nth(7).innerText(), /스위스 2R \(0승 1패\)/);
+    for (let i = 4; i < 8; i++) await finish(i, 0, 2);
+    await t.goto(`${base}#games`);
+    await t.waitForFunction(() => document.querySelectorAll('a.game:not(.other)').length === 10);
+    assert.match(await cards().nth(8).innerText(), /스위스 3R \(1승 1패\)/);
+    for (let i = 8; i < 10; i++) await finish(i, 3, 1);
+    await t.goto(`${base}#games`);
+    await t.waitForFunction(() => document.querySelectorAll('a.game:not(.other)').length === 13);
+    assert.match(await cards().nth(10).innerText(), /준결승 1/);
+    assert.match(await cards().nth(12).innerText(), /결승[\s\S]*준결승 1 승자[\s\S]*준결승 2 승자/);
+    await t.goto(`${base}#plan`);
+    await t.waitForSelector('text=결선 대진');
+    const sw = await text(t);
+    assert.equal((sw.match(/결선 진출/g) || []).length, 4);
+    assert.equal((sw.match(/탈락/g) || []).length >= 4, true);
+    await shot(t, '44-swiss-made');
+    await s.goto(`${base}?v=${tid}`);
+    await s.waitForSelector('text=학생용 · 보기 전용');
+    await s.selectOption('select[data-change="pickGrade"]', { label: '스위스반' });
+    await s.getByRole('button', { name: '경기 결과' }).click();
+    await s.waitForSelector('text=스위스 순위');
+    assert.match(await text(s), /스위스 순위[\s\S]*결선 대진[\s\S]*준결승 1/);
+  });
+
   await step('사용 안내: 대회 안과 대회 목록에서 간략 사용법 열기', async () => {
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);
