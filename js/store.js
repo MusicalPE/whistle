@@ -45,9 +45,12 @@ const randomId = () => `${Date.now().toString(36)}${(seq++).toString(36).padStar
 // 체험용 자료 채우기. 처음 열거나 12시간이 지났으면 새로 채우고, 진행 중인 경기가 방금 시작한 것처럼 시간을 지금에 맞춘다.
 const TRY_KEY = 'whistle-try-v1', TRY_USER = 'whistle-try-user', TRY_AT = 'whistle-try-at';
 export const TID_KEY = TRY ? 'whistle-try-tid' : 'whistle-tid';
-function seedTry({ SEED, SEED_TID, SEED_AT }) {
+function seedTry({ SEED, SEED_TID, SEED_AT, SEED_REV = 1 }) {
   const at = Number(localStorage.getItem(TRY_AT)) || 0;
-  if (localStorage.getItem(TRY_KEY) && Date.now() - at < 12 * 3600 * 1000) return;
+  // 견본이 바뀌었으면(SEED_REV) 12시간을 기다리지 않고 바로 새 견본으로
+  const sameRev = localStorage.getItem('whistle-try-rev') === String(SEED_REV);
+  if (localStorage.getItem(TRY_KEY) && sameRev && Date.now() - at < 12 * 3600 * 1000) return;
+  localStorage.setItem('whistle-try-rev', String(SEED_REV));
   const d = Date.now() - SEED_AT;
   const shift = (v) => (typeof v === 'number' && v > 1.5e12 && v < 3e12 ? v + d : Array.isArray(v) ? v.map(shift) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shift(x)])) : v);
   localStorage.setItem(TRY_KEY, JSON.stringify(shift(SEED)));

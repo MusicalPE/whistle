@@ -626,6 +626,15 @@ try {
     await s2.goto(`${base}?v=${tid2}&demo`);
     await s2.waitForSelector('text=학생용 · 보기 전용');
     assert.match(await s2.locator('#app').innerText(), /1 : 1/);
+    // 대회 편성 시험용: 5학년 피구 8팀 (경기는 아직 없음)
+    await d.goto(`${base}?demo#plan`);
+    await d.waitForSelector('text=대회 방식');
+    await d.locator('[data-act="pickGrade"]', { hasText: '5학년' }).first().click();
+    await d.waitForSelector('text=8팀 풀리그 28경기');
+    // 예전 견본으로 체험하던 기기도 견본이 바뀌면(SEED_REV) 바로 새 견본으로
+    await d.evaluate(() => { const r = JSON.parse(localStorage.getItem('whistle-try-v1')); for (const t of Object.values(r.t)) for (const [k, g] of Object.entries(t.grades)) if (g.label === '5학년') delete t.grades[k]; localStorage.setItem('whistle-try-v1', JSON.stringify(r)); localStorage.setItem('whistle-try-rev', '1'); });
+    await d.goto(`${base}?demo#plan`); await d.waitForSelector('text=대회 방식');
+    assert.match(await d.locator('#app').innerText(), /5학년/, '견본이 바뀌면 다시 채워져야 함');
     await c2.close();
   });
 
