@@ -827,10 +827,12 @@ try {
     await addGrade('농구반', 'basket');
     await t.goto(`${base}#rules`);
     await t.waitForSelector('text=파울 기록');
-    assert.match(await text(t), /개인 파울 퇴장[\s\S]*5반칙[\s\S]*팀 파울[\s\S]*5개[\s\S]*공격 제한 시간[\s\S]*24초[\s\S]*8초 룰/);
+    assert.match(await text(t), /개인 파울 퇴장[\s\S]*5반칙[\s\S]*팀 파울[\s\S]*5개[\s\S]*공격 제한 시간[\s\S]*8초 세기/);
     await t.getByRole('button', { name: '개인 파울 퇴장 줄이기' }).click();
     await t.getByRole('button', { name: '개인 파울 퇴장 줄이기' }).click();
     await t.waitForSelector('text=3반칙');
+    for (let i = 0; i < 14; i++) await t.getByRole('button', { name: '공격 제한 시간 줄이기' }).click();
+    await t.waitForSelector('text=10초');
     await t.goto(`${base}#teams`);
     await t.waitForSelector('text=+ 팀 추가');
     await addTeam('농구 가', ['1 가람', '2 나래', '3 다온', '4 라온', '5 마루', '6 바다']);
@@ -847,7 +849,7 @@ try {
     await t.locator('[data-act="gPoss"][data-team="a"]').click();
     await t.waitForSelector('[data-bc]');
     assert.match(await text(t), /농구 가 공격/);
-    assert.ok(Number(await t.locator('[data-sc]').innerText()) >= 23);
+    assert.ok(Number(await t.locator('[data-sc]').innerText()) >= 9);
     await btn(t, '넘어옴').click();
     await t.waitForFunction(() => !document.querySelector('[data-bc]'));
     await btn(t, '14초로').click();
@@ -878,8 +880,12 @@ try {
     await t.locator('[data-act="gPlus"][data-team="a"][data-pts="2"]').click();
     await t.locator('#sheet .pl').first().click();
     await t.waitForFunction(() => /농구 나 공격/.test(document.body.innerText));
-    // 8초 위반: 버저와 함께 시계가 멈추고 기록이 남는다
-    await t.waitForFunction(() => /농구 나 8초 위반 · 농구 가 공/.test(document.body.innerText), null, { timeout: 15000 });
+    // 8초는 0이 돼도 울리지 않고 시계가 계속 간다
+    await t.waitForFunction(() => document.querySelector('[data-bc]') && document.querySelector('[data-bc]').textContent === '0', null, { timeout: 15000 });
+    assert.equal(await running(), true);
+    assert.ok(!/8초 위반/.test(await text(t)));
+    // 공격 제한 시간(10초로 줄여 둠)이 다 되면 버저와 함께 시계가 멈추고 기록이 남는다
+    await t.waitForFunction(() => /농구 나 10초 위반 · 농구 가 공/.test(document.body.innerText), null, { timeout: 15000 });
     assert.equal(await running(), false);
     // 전광판: 팀 파울과 공격 제한 시간
     await b.goto(`${base}?b=${tid}`);

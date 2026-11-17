@@ -479,7 +479,7 @@ test('농구 파울: 휘슬에 시계가 멈추고, 개인·팀 파울이 쌓이
   assert.equal(rec['ta/p1'].pf, 4);
 });
 
-test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞춰 돌고, 0이 되면 버저와 함께 시계가 멈춘다', () => {
+test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞춰 돌고, 공격 제한 시간이 0이 되면 버저와 함께 시계가 멈춘다', () => {
   const grade = L.gradeFromSport('basket', '6학년');
   const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
   L.start(g, grade, ctxAt(0));
@@ -498,19 +498,20 @@ test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞�
   assert.deepEqual([g.poss, L.tLeft(g.sc, 55000), L.tLeft(g.bc, 55000)], ['b', 24000, 8000]);
   L.shotSet(g, grade, ctxAt(56000), 14);
   assert.equal(L.tLeft(g.sc, 56000), 14000);
-  // 8초 위반이 먼저
-  assert.deepEqual(L.shotUp(g, grade, ctxAt(60000)), []);
-  const v8 = L.shotUp(g, grade, ctxAt(63000));
-  assert.match(v8[0].text, /나팀 8초 위반 · 가팀 공/);
+  // 8초는 0이 돼도 울리지 않고 시계도 멈추지 않는다
+  assert.deepEqual(L.shotUp(g, grade, ctxAt(64000)), []);
+  assert.deepEqual([L.tLeft(g.bc, 64000), g.clock.run, g.buzz], [0, true, undefined]);
+  // 공격 제한 시간이 다 되면 버저와 함께 시계가 멈춘다
+  const v = L.shotUp(g, grade, ctxAt(70000));
+  assert.match(v[0].text, /나팀 24초 위반 · 가팀 공/);
   assert.deepEqual([g.clock.run, g.sc.run, g.bc, g.buzz.k], [false, false, undefined, 'buzzer']);
-  assert.deepEqual(L.shotUp(g, grade, ctxAt(64000)), [], '두 번 불러도 한 번만');
-  // 24초 위반
-  L.possession(g, grade, ctxAt(70000), 'a'); L.crossed(g, grade); L.toggleClock(g, grade, ctxAt(70000));
-  const v24 = L.shotUp(g, grade, ctxAt(94000));
+  assert.deepEqual(L.shotUp(g, grade, ctxAt(71000)), [], '두 번 불러도 한 번만');
+  L.possession(g, grade, ctxAt(72000), 'a'); L.crossed(g, grade); L.toggleClock(g, grade, ctxAt(72000));
+  const v24 = L.shotUp(g, grade, ctxAt(96000));
   assert.match(v24[0].text, /가팀 24초 위반 · 나팀 공/);
   assert.equal(g.clock.run, false);
   // 구간이 바뀌거나 경기가 끝나면 지운다
-  L.nextPart(g, grade, ctxAt(95000));
+  L.nextPart(g, grade, ctxAt(97000));
   assert.deepEqual([g.sc, g.bc, g.poss], [undefined, undefined, undefined]);
   // 8초 룰을 끄면 24초만
   const g2 = { id: 'y', ...L.newGame('g6', 2, 'ta', 'tb') }, no8 = { ...grade, eight: false };

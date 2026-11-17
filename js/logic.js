@@ -337,18 +337,18 @@ export function uncard(g, grade, ctx, l) {
 export const yellows = (g, side, pid) => Number(((g.yc || {})[side] || {})[pid]) || 0;
 export const sentOff = (g, side, pid) => !!((g.rc || {})[side] || {})[pid];
 
-// 공격 제한 시간이나 8초가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
+// 공격 제한 시간이 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
+// 8초는 숫자만 보여 주고 울리거나 시계를 멈추지 않는다(심판이 보고 판단한다).
 export function shotUp(g, grade, ctx) {
   norm(g, grade);
   if (g.status !== 'live') return [];
-  const hit = g.sc && g.sc.run && tLeft(g.sc, ctx.now) <= 0 ? 'sc' : g.bc && g.bc.run && tLeft(g.bc, ctx.now) <= 0 ? 'bc' : '';
-  if (!hit) return [];
+  if (!(g.sc && g.sc.run && tLeft(g.sc, ctx.now) <= 0)) return [];
   halt(g, ctx.now);
   const team = g.poss, other = team === 'a' ? 'b' : team === 'b' ? 'a' : '';
-  if (hit === 'sc') g.sc = { run: false, left: 0, at: ctx.now };
+  g.sc = { run: false, left: 0, at: ctx.now };
   delete g.bc;
   g.buzz = { at: ctx.now, k: 'buzzer' };
-  return [mk(g, grade, ctx, 'info', `${team ? `${ctx.names[team]} ` : ''}${hit === 'sc' ? `${Math.round(shotMs(grade) / 1000)}초` : '8초'} 위반${other ? ` · ${ctx.names[other]} 공` : ''}`)];
+  return [mk(g, grade, ctx, 'info', `${team ? `${ctx.names[team]} ` : ''}${Math.round(shotMs(grade) / 1000)}초 위반${other ? ` · ${ctx.names[other]} 공` : ''}`)];
 }
 
 // 시계가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
