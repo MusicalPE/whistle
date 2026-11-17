@@ -247,6 +247,16 @@ export function toggleClock(g, grade, ctx) {
   return [];
 }
 
+// 시계를 손으로 맞춘다(보조 선생님이 늦게 멈췄거나 늦게 다시 시작했을 때). which: clock 경기 시계, sc 공격 제한 시간.
+export function adjust(g, grade, ctx, which, deltaMs) {
+  norm(g, grade); live(g);
+  const k = which === 'sc' ? 'sc' : 'clock', c = g[k];
+  if (!c) return [];
+  const max = k === 'sc' ? 99000 : 99 * 60000;
+  g[k] = { run: c.run, left: Math.min(max, Math.max(0, tLeft(c, ctx.now) + Number(deltaMs))), at: ctx.now };
+  return [];
+}
+
 // 경기 시계와 공격 제한 시간·8초를 함께 멈춘다.
 function halt(g, now) {
   for (const k of ['clock', 'sc', 'bc']) if (g[k] && g[k].run) g[k] = { run: false, left: tLeft(g[k], now), at: now };
@@ -254,11 +264,10 @@ function halt(g, now) {
 const clearShot = (g) => { delete g.sc; delete g.bc; delete g.poss; };
 
 // ----- 농구: 파울, 공격 제한 시간, 8초 -----
-// 심판이 파울을 불었을 때: 먼저 시계부터 멈추고 휘슬을 울린다(선수는 그 다음에 고른다).
+// 심판이 파울을 불었을 때: 먼저 시계부터 멈춘다(선수는 그 다음에 고른다). 휘슬은 심판이 직접 분다.
 export function foulStop(g, grade, ctx) {
   norm(g, grade); live(g);
   halt(g, ctx.now);
-  g.buzz = { at: ctx.now, k: 'whistle' };
   return [];
 }
 
@@ -321,7 +330,6 @@ export function card(g, grade, ctx, team, pid, color) {
   let red = color === 'r', second = false;
   if (!red) { g.yc[team][pid] = (Number(g.yc[team][pid]) || 0) + 1; if (g.yc[team][pid] >= 2) { red = true; second = true; } }
   if (red) { g.rc[team][pid] = true; g.lineup[team][pid] = 'red'; }
-  g.buzz = { at: ctx.now, k: 'whistle' };
   const text = `${ctx.names[team]} ${red ? (second ? '경고 2회 퇴장' : '퇴장') : '경고'} · ${who}`;
   return [mk(g, grade, ctx, 'card', text, { team, pid, color: red && !second ? 'r' : 'y', red })];
 }
@@ -357,6 +365,7 @@ export function timeUp(g, grade, ctx) {
   if (g.status !== 'live' || !g.clock || !g.clock.run || clockLeft(g, ctx.now) > 0) return [];
   g.clock = { run: false, left: 0, at: ctx.now };
   halt(g, ctx.now);
+  g.buzz = { at: ctx.now, k: 'whistle' };   // 구간 시간이 다 됐음을 알리는 휘슬
   if (grade.format !== 'dodge') return [mk(g, grade, ctx, 'info', `${partName(grade, g.cur)} 시간 종료`)];
   if (g.remain.a === g.remain.b) { g.tie = true; return [mk(g, grade, ctx, 'info', `시간 종료 · 남은 인원 ${g.remain.a} : ${g.remain.b} 동점`)]; }
   return endDodgeSet(g, grade, ctx, g.remain.a > g.remain.b ? 'a' : 'b', '시간 종료');
@@ -409,6 +418,7 @@ export function editGoal(l, ctx, pid, apid) {
 
 function finish(g, grade, ctx, logs) {
   clearShot(g); delete g.rest;
+  g.buzz = { at: ctx.now, k: 'end' };   // 경기 종료 휘슬
   if (g.clock) g.clock = { run: false, left: clockLeft(g, ctx.now), at: ctx.now };
   g.status = 'done'; g.endedAt = ctx.now;
   logs.push({ at: ctx.now, tag: '종료', type: 'info', text: `경기 종료 ${g.sa} : ${g.sb}`, by: ctx.uid || '' });

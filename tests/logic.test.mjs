@@ -456,14 +456,14 @@ test('득점 기록 고치기: 점수만 올린 기록에 나중에 선수와 �
   assert.throws(() => L.editGoal({ ...goal, x: true }, c(9), 'p2', ''));
 });
 
-test('농구 파울: 휘슬에 시계가 멈추고, 개인·팀 파울이 쌓이며, 5반칙 퇴장과 팀 파울 자유투를 알린다', () => {
+test('농구 파울: 누르면 시계가 멈추고, 개인·팀 파울이 쌓이며, 5반칙 퇴장과 팀 파울 자유투를 알린다', () => {
   const grade = L.gradeFromSport('basket', '6학년');
   assert.deepEqual([grade.fouls, grade.shot, grade.eight, L.pfMax(grade), L.tfMax(grade)], [true, true, true, 5, 5]);
   assert.equal(L.usesFouls(L.gradeFromSport('futsal', '6학년')), false);
   const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
   L.start(g, grade, ctxAt(0));
   L.foulStop(g, grade, ctxAt(10000));
-  assert.deepEqual([g.clock.run, g.clock.left, g.buzz.k], [false, 8 * 60000 - 10000, 'whistle']);
+  assert.deepEqual([g.clock.run, g.clock.left, g.buzz], [false, 8 * 60000 - 10000, undefined], '시계만 멈추고 휘슬은 울리지 않는다');
   const logs = [];
   for (let i = 1; i <= 5; i++) logs.push(...L.foul(g, grade, ctxAt(10000 + i), 'a', 'p1'));
   assert.match(logs[0].text, /가팀 파울 · 1 선수1 \(개인 1 · 팀 1\)$/);
@@ -526,7 +526,7 @@ test('축구 경고·퇴장: 경고 두 번이면 퇴장, 퇴장 선수는 경�
   const c = (now) => ctxAt(now, { rosters: { a: roster(10, 8), b: roster(10, 8) } });
   L.start(g, grade, c(0));
   const y1 = L.card(g, grade, c(1), 'a', 'p3', 'y')[0];
-  assert.deepEqual([y1.text, y1.color, y1.red, L.yellows(g, 'a', 'p3'), g.lineup.a.p3, g.buzz.k], ['가팀 경고 · 3 선수3', 'y', false, 1, 'on', 'whistle']);
+  assert.deepEqual([y1.text, y1.color, y1.red, L.yellows(g, 'a', 'p3'), g.lineup.a.p3, g.buzz], ['가팀 경고 · 3 선수3', 'y', false, 1, 'on', undefined]);
   const y2 = L.card(g, grade, c(2), 'a', 'p3', 'y')[0];
   assert.deepEqual([y2.text, y2.red, L.sentOff(g, 'a', 'p3'), g.lineup.a.p3], ['가팀 경고 2회 퇴장 · 3 선수3', true, true, 'red']);
   assert.throws(() => L.card(g, grade, c(3), 'a', 'p3', 'y'), /이미 퇴장/);
@@ -597,4 +597,29 @@ test('쉬는 시간: 구간이 끝나면 자동으로 세고, 시계를 시작�
   const v = { ...L.gradeFromSport('volley', '4'), rest: 1 }, gv = { id: 'z', ...L.newGame('g', 3, 'ta', 'tb') };
   L.start(gv, v, ctxAt(0)); L.score(gv, v, ctxAt(1), 'a', 1, ''); L.nextPart(gv, v, ctxAt(2));
   assert.deepEqual([gv.cur, gv.rest.ms], [1, 60000]);
+});
+
+test('소리와 시계 맞추기: 구간 시간이 다 되면 휘슬, 경기가 끝나면 종료 휘슬, 멈춘 시계는 손으로 맞출 수 있다', () => {
+  const grade = L.gradeFromSport('basket', '6학년');
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0));
+  L.possession(g, grade, ctxAt(0), 'a');
+  L.toggleClock(g, grade, ctxAt(30000));
+  assert.deepEqual([g.clock.left, g.sc.left], [8 * 60000 - 30000, 0]);
+  L.adjust(g, grade, ctxAt(31000), 'clock', 10000);
+  L.adjust(g, grade, ctxAt(31000), 'clock', -1000);
+  assert.deepEqual([g.clock.left, g.clock.run], [8 * 60000 - 21000, false]);
+  L.adjust(g, grade, ctxAt(31000), 'sc', 5000);
+  assert.equal(g.sc.left, 5000);
+  L.adjust(g, grade, ctxAt(31000), 'clock', -99 * 60000);
+  assert.equal(g.clock.left, 0, '0 아래로는 내려가지 않는다');
+  L.adjust(g, grade, ctxAt(31000), 'clock', 2000);
+  L.toggleClock(g, grade, ctxAt(40000));
+  // 도는 중에 맞춰도 이어서 돈다
+  L.adjust(g, grade, ctxAt(40500), 'clock', 1000);
+  assert.deepEqual([g.clock.run, L.clockLeft(g, 40500)], [true, 2500]);
+  L.timeUp(g, grade, ctxAt(43100));
+  assert.deepEqual([g.clock.run, g.buzz.k], [false, 'whistle']);
+  for (let i = 0; i < 4; i++) L.nextPart(g, grade, ctxAt(50000 + i));
+  assert.deepEqual([g.status, g.buzz.k], ['done', 'end']);
 });

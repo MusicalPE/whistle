@@ -298,3 +298,8 @@ button.log.edit:hover span { text-decoration: underline; }
 .ycard, .rcard { display: inline-block; width: 9px; height: 13px; border-radius: 2px; vertical-align: -1px; }
 .ycard { background: #FACC15; border: 1px solid #CA8A04; }
 .rcard { background: #DC2626; border: 1px solid #991B1B; }
+
+/* 남은 시간 맞추기 */
+.adj { margin: 10px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.adj .label { flex: 1 0 100%; }
+.adj button { flex: 1; min-width: 46px; height: 38px; border: 1.5px solid var(--ink); background: #fff; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; padding: 0; }

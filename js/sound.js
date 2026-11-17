@@ -18,4 +18,6 @@ function tone({ type, freq, dur, vol, trem, sweep }) {
 export function whistle() { tone({ type: 'sine', freq: 2950, dur: 0.55, vol: 0.32, trem: 38 }); tone({ type: 'sine', freq: 3120, dur: 0.55, vol: 0.2, trem: 38, sweep: -60 }); }
 // 버저: 시간 위반 때 낮고 길게.
 export function buzzer() { tone({ type: 'square', freq: 196, dur: 0.9, vol: 0.16 }); tone({ type: 'sawtooth', freq: 247, dur: 0.9, vol: 0.1 }); }
-export const play = (k) => (k === 'buzzer' ? buzzer() : whistle());
+// 경기 종료: 길게 세 번.
+export function endWhistle() { whistle(); setTimeout(whistle, 650); setTimeout(() => { tone({ type: 'sine', freq: 2950, dur: 1.1, vol: 0.32, trem: 38 }); tone({ type: 'sine', freq: 3120, dur: 1.1, vol: 0.2, trem: 38, sweep: -60 }); }, 1300); }
+export const play = (k) => (k === 'buzzer' ? buzzer() : k === 'end' ? endWhistle() : whistle());

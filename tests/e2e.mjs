@@ -861,6 +861,20 @@ try {
     const scStop = await t.locator('[data-sc]').innerText();
     await t.locator('#sheet .pl').first().click();
     await t.waitForSelector('text=농구 나 파울 · 1 사랑 (개인 1 · 팀 1)');
+    // 멈춘 시계는 손으로 맞출 수 있다
+    const clk = () => t.locator('.dark [data-clock]').first().innerText();
+    const c0 = await clk();
+    await t.locator('[data-act="gAdj"][data-k="clock"][data-ms="10000"]').click();
+    await t.waitForFunction((v) => document.querySelector('.dark [data-clock]').textContent !== v, c0);
+    const sec = (v) => Number(v.split(':')[0]) * 60 + Number(v.split(':')[1]);
+    assert.equal(sec(await clk()) - sec(c0), 10);
+    await t.locator('[data-act="gAdj"][data-k="clock"][data-ms="-10000"]').click();
+    await t.waitForFunction((v) => document.querySelector('.dark [data-clock]').textContent === v, c0);
+    const s0 = Number(await t.locator('[data-sc]').innerText());
+    await t.locator('[data-act="gAdj"][data-k="sc"][data-ms="1000"]').click();
+    await t.waitForFunction((v) => Number(document.querySelector('[data-sc]').textContent) === v + 1, s0);
+    await t.locator('[data-act="gAdj"][data-k="sc"][data-ms="-1000"]').click();
+    await t.waitForFunction((v) => Number(document.querySelector('[data-sc]').textContent) === v, s0);
     await t.waitForTimeout(1200);
     assert.equal(await t.locator('[data-sc]').innerText(), scStop, '멈춘 동안에는 공격 제한 시간도 멈춤');
     await shot(t, '45-hoop');
