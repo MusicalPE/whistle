@@ -6,7 +6,7 @@ export const SPORTS = {
   futsal: { name: '풋살', format: 'halves', formats: ['halves', 'single'], minutes: 10, starters: 5, cards: 3, steps: '1', assist: true },
   soccer: { name: '축구', format: 'halves', formats: ['halves', 'single'], minutes: 15, starters: 8, cards: 3, steps: '1', assist: true },
   netball: { name: '넷볼', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 7, cards: 3, steps: '1' },
-  basket: { name: '농구', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 5, cards: 5, steps: '123' },
+  basket: { name: '농구', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 5, cards: 5, steps: '123', fouls: true, shot: true, eight: true },
   volley: { name: '배구', format: 'sets', formats: ['sets'], sets: 3, setPoints: 25, starters: 6, cards: 6, steps: '1' },
   teeball: { name: '티볼', format: 'innings', formats: ['innings'], innings: 3, starters: 10, cards: 3, steps: '1', detail: true, rotate: 'all' },
   baseball: { name: '야구', format: 'innings', formats: ['innings'], innings: 5, starters: 9, cards: 3, steps: '1', detail: true, rotate: 'out3' },
@@ -32,6 +32,8 @@ export function gradeFromSport(sport, label) {
     assist: !!p.assist,
     // outDetail: 피구에서 누가 아웃됐고 누가 아웃시켰는지까지 고른다. 끄면 인원만 센다.
     outDetail: !!p.outDetail,
+    // 농구: 파울 기록(개인 pfMax개면 퇴장, 구간마다 팀 파울 tfMax개째부터 자유투), 공격 제한 시간(shotSec초), 8초 룰
+    fouls: !!p.fouls, shot: !!p.shot, eight: !!p.eight, pfMax: 5, tfMax: 5, shotSec: 24,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
     // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
@@ -46,6 +48,14 @@ export const usesPicker = (grade) => isTimed(grade) || grade.format === 'innings
 // 1·2·3점 단추는 농구(와 직접 입력 종목)에서만 쓴다. 그 밖의 종목은 항상 1점씩.
 export const canStep = (grade) => isTimed(grade) && (grade.sport === 'basket' || grade.sport === 'custom');
 export const stepsOf = (grade) => (canStep(grade) && grade.steps === '123' ? [1, 2, 3] : [1]);
+// 농구 규칙을 쓰는지. 파울 기록과 공격 제한 시간은 따로 켜고 끈다.
+export const usesFouls = (grade) => grade.sport === 'basket' && isTimed(grade) && !!grade.fouls;
+export const usesShot = (grade) => grade.sport === 'basket' && isTimed(grade) && !!grade.shot;
+export const pfMax = (grade) => Math.max(1, Number(grade.pfMax) || 5);
+export const tfMax = (grade) => Math.max(1, Number(grade.tfMax) || 5);
+export const shotMs = (grade) => Math.max(5, Number(grade.shotSec) || 24) * 1000;
+// 시계 하나(경기 시계·공격 제한 시간·8초)에 남은 시간
+export const tLeft = (c, now) => (!c ? 0 : Math.max(0, c.run ? c.left - (now - c.at) : c.left));
 export const partMs = (grade) => Math.max(1, Number(grade.minutes) || 1) * 60000;
 // 같은 득점이 겹쳤는지 물어보는 시간(밀리초). 득점이 빠른 종목은 짧게.
 export const dupWindow = (grade) => (grade.sport === 'basket' || grade.sport === 'netball' ? 5000 : 10000);
@@ -81,6 +91,8 @@ export function norm(g, grade) {
   g.remain = { a: 0, b: 0, ...(g.remain || {}) };
   g.r0 = { a: 0, b: 0, ...(g.r0 || {}) };
   g.dout = { a: {}, b: {}, ...(g.dout || {}) };
+  g.pf = { a: {}, b: {}, ...(g.pf || {}) };
+  g.tf = { a: pad((g.tf || {}).a), b: pad((g.tf || {}).b) };
   g.cur = g.cur || 0; g.half = g.half || 0; g.sa = g.sa || 0; g.sb = g.sb || 0;
   if (grade.format === 'innings') {
     g.bases = { b1: '', b2: '', b3: '', ...(g.bases || {}) };
@@ -174,9 +186,90 @@ export function start(g, grade, ctx) {
 export function toggleClock(g, grade, ctx) {
   norm(g, grade); live(g);
   if (!g.clock) return [];
-  if (g.clock.run) g.clock = { run: false, left: clockLeft(g, ctx.now), at: ctx.now };
-  else if (g.clock.left > 0) g.clock = { run: true, left: g.clock.left, at: ctx.now };
+  if (g.clock.run) halt(g, ctx.now);
+  else if (g.clock.left > 0) {
+    g.clock = { run: true, left: g.clock.left, at: ctx.now };
+    for (const k of ['sc', 'bc']) if (g[k] && g[k].left > 0) g[k] = { run: true, left: g[k].left, at: ctx.now };
+  }
   return [];
+}
+
+// 경기 시계와 공격 제한 시간·8초를 함께 멈춘다.
+function halt(g, now) {
+  for (const k of ['clock', 'sc', 'bc']) if (g[k] && g[k].run) g[k] = { run: false, left: tLeft(g[k], now), at: now };
+}
+const clearShot = (g) => { delete g.sc; delete g.bc; delete g.poss; };
+
+// ----- 농구: 파울, 공격 제한 시간, 8초 -----
+// 심판이 파울을 불었을 때: 먼저 시계부터 멈추고 휘슬을 울린다(선수는 그 다음에 고른다).
+export function foulStop(g, grade, ctx) {
+  norm(g, grade); live(g);
+  halt(g, ctx.now);
+  g.buzz = { at: ctx.now, k: 'whistle' };
+  return [];
+}
+
+// 파울 기록. pid 가 없으면 팀 파울만 센다.
+export function foul(g, grade, ctx, team, pid) {
+  norm(g, grade); live(g);
+  halt(g, ctx.now);
+  const who = pid ? playerLabel(ctx, team, pid) : '';
+  let mine = 0;
+  if (who) { g.pf[team][pid] = (Number(g.pf[team][pid]) || 0) + 1; mine = g.pf[team][pid]; }
+  g.tf[team][g.cur] += 1;
+  const tf = g.tf[team][g.cur];
+  const text = `${ctx.names[team]} 파울${who ? ` · ${who}` : ''} (${who ? `개인 ${mine} · ` : ''}팀 ${tf})${who && mine >= pfMax(grade) ? ` · ${pfMax(grade)}반칙 퇴장` : ''}${tf === tfMax(grade) ? ' · 팀 파울, 이제부터 자유투' : ''}`;
+  return [mk(g, grade, ctx, 'foul', text, { team, pid: who ? pid : '', part: g.cur })];
+}
+
+// 잘못 기록한 파울을 되돌린다(기록 줄을 취소로 바꾸는 일은 화면 쪽에서 한다).
+export function unfoul(g, grade, ctx, team, pid, part) {
+  norm(g, grade);
+  if (pid && g.pf[team][pid]) { g.pf[team][pid] -= 1; if (!g.pf[team][pid]) delete g.pf[team][pid]; }
+  const i = Number(part) || 0;
+  if (g.tf[team][i] > 0) g.tf[team][i] -= 1;
+  return [];
+}
+
+export const foulsOf = (g, side, pid) => Number(((g.pf || {})[side] || {})[pid]) || 0;
+export const fouledOut = (g, grade, side, pid) => usesFouls(grade) && foulsOf(g, side, pid) >= pfMax(grade);
+
+function setPoss(g, grade, team, now) {
+  const run = !!(g.clock && g.clock.run);
+  g.poss = team;
+  g.sc = { run, left: shotMs(grade), at: now };
+  if (grade.eight) g.bc = { run, left: 8000, at: now }; else delete g.bc;
+}
+
+// 공격권이 넘어감: 공격 제한 시간을 처음부터, 8초도 다시 센다.
+export function possession(g, grade, ctx, team) {
+  norm(g, grade); live(g);
+  setPoss(g, grade, team, ctx.now);
+  return [];
+}
+
+// 공격 제한 시간을 다시 맞춘다(24초, 공격 리바운드 뒤 14초 등).
+export function shotSet(g, grade, ctx, secs) {
+  norm(g, grade); live(g);
+  g.sc = { run: !!(g.clock && g.clock.run), left: Math.max(1, Number(secs) || 24) * 1000, at: ctx.now };
+  return [];
+}
+
+// 공이 하프라인을 넘어옴: 8초 세기를 끝낸다.
+export function crossed(g, grade) { norm(g, grade); delete g.bc; return []; }
+
+// 공격 제한 시간이나 8초가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
+export function shotUp(g, grade, ctx) {
+  norm(g, grade);
+  if (g.status !== 'live') return [];
+  const hit = g.sc && g.sc.run && tLeft(g.sc, ctx.now) <= 0 ? 'sc' : g.bc && g.bc.run && tLeft(g.bc, ctx.now) <= 0 ? 'bc' : '';
+  if (!hit) return [];
+  halt(g, ctx.now);
+  const team = g.poss, other = team === 'a' ? 'b' : team === 'b' ? 'a' : '';
+  if (hit === 'sc') g.sc = { run: false, left: 0, at: ctx.now };
+  delete g.bc;
+  g.buzz = { at: ctx.now, k: 'buzzer' };
+  return [mk(g, grade, ctx, 'info', `${team ? `${ctx.names[team]} ` : ''}${hit === 'sc' ? `${Math.round(shotMs(grade) / 1000)}초` : '8초'} 위반${other ? ` · ${ctx.names[other]} 공` : ''}`)];
 }
 
 // 시계가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
@@ -184,6 +277,7 @@ export function timeUp(g, grade, ctx) {
   norm(g, grade);
   if (g.status !== 'live' || !g.clock || !g.clock.run || clockLeft(g, ctx.now) > 0) return [];
   g.clock = { run: false, left: 0, at: ctx.now };
+  halt(g, ctx.now);
   if (grade.format !== 'dodge') return [mk(g, grade, ctx, 'info', `${partName(grade, g.cur)} 시간 종료`)];
   if (g.remain.a === g.remain.b) { g.tie = true; return [mk(g, grade, ctx, 'info', `시간 종료 · 남은 인원 ${g.remain.a} : ${g.remain.b} 동점`)]; }
   return endDodgeSet(g, grade, ctx, g.remain.a > g.remain.b ? 'a' : 'b', '시간 종료');
@@ -215,6 +309,8 @@ export function score(g, grade, ctx, team, pts, pid, apid) {
   arr[g.cur] = Math.max(0, arr[g.cur] + pts);
   recount(g, grade);
   if (pts > 0) g.last = { team, at: ctx.now, by: ctx.uid || '' };
+  // 농구: 골이 들어가면 공격권이 상대에게 넘어가고 공격 제한 시간을 처음부터 센다.
+  if (pts > 0 && usesShot(grade)) setPoss(g, grade, team === 'a' ? 'b' : 'a', ctx.now);
   if (!usesPicker(grade)) return [];
   if (pts < 0) return [mk(g, grade, ctx, 'fix', `${ctx.names[team]} 점수 ${pts} (정정)`, { team })];
   const who = (pid && playerLabel(ctx, team, pid)) || '선수 기록 없음';
@@ -232,6 +328,7 @@ export function editGoal(l, ctx, pid, apid) {
 }
 
 function finish(g, grade, ctx, logs) {
+  clearShot(g);
   if (g.clock) g.clock = { run: false, left: clockLeft(g, ctx.now), at: ctx.now };
   g.status = 'done'; g.endedAt = ctx.now;
   logs.push({ at: ctx.now, tag: '종료', type: 'info', text: `경기 종료 ${g.sa} : ${g.sb}`, by: ctx.uid || '' });
@@ -246,6 +343,7 @@ export function nextPart(g, grade, ctx) {
     const logs = [mk(g, grade, ctx, 'info', `${partName(grade, g.cur)} 종료 ${g.sa} : ${g.sb}`)];
     if (g.cur >= n - 1) return finish(g, grade, ctx, logs);
     g.cur += 1; g.clock = { run: false, left: partMs(grade), at: ctx.now };
+    clearShot(g);
     return logs;
   }
   if (grade.format === 'innings') {
@@ -479,7 +577,7 @@ export function records(teams, games, logs) {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, pf: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -507,6 +605,9 @@ export function records(teams, games, logs) {
         if (pas.length) bits.push(`${pas.length}타석 ${hits.length}안타${rbi ? ` ${rbi}타점` : ''}`);
         if (goals) bits.push(`${goals}${pas.length || runs ? '득점' : '점'}`);
         if (assists) bits.push(`어시스트 ${assists}`);
+        const fouls = mine.filter((l) => l.type === 'foul' && l.pid === pid).length;
+        r.pf += fouls;
+        if (fouls) bits.push(`파울 ${fouls}`);
         if (kills) bits.push(`아웃시킴 ${kills}`);
         r.detail.push(`${g.no}경기 ${other}전 · ${bits.join(', ')}`);
       }

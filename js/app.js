@@ -3,6 +3,7 @@ import { VERSION } from './version.js';
 import * as L from './logic.js';
 import * as P from './plan.js';
 import * as DS from './drawshow.js';
+import * as Sound from './sound.js';
 import { createStore, forceDemo, CONFIGURED, TRY, TID_KEY } from './store.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -126,7 +127,9 @@ const demoBar = () => (S.store.demo ? `<div class="demo">${TRY ? '미리보기 �
 // 선생님 경기 화면의 기록 줄: 득점 기록은 눌러서 넣은 선수·어시스트를 나중에 고칠 수 있다.
 const teacherLogRow = (gameId) => (l) => (l.type === 'goal' && !l.x
   ? `<button class="log edit" data-act="editGoal" data-id="${gameId}" data-log="${l.id}" aria-label="득점 기록 고치기"><b>${esc(l.tag)}</b><span>${esc(l.text)}</span><i>${l.pid ? '고치기' : '선수 넣기'}</i></button>`
-  : logRow(l));
+  : l.type === 'foul' && !l.x
+    ? `<button class="log edit" data-act="foulUndo" data-id="${gameId}" data-log="${l.id}" aria-label="파울 기록 취소"><b>${esc(l.tag)}</b><span>${esc(l.text)}</span><i>취소</i></button>`
+    : logRow(l));
 // 이 경기 명단에 든 선수 모두(뛰는 중·교체 대기·나간 선수). 나중에 고칠 때는 지금 뛰는 선수만으로는 모자라다.
 const gamePlayers = (g, side) => playersOf(g[side]).filter((p) => (g.lineup[side] || {})[p.pid]);
 const logRow = (l) => `<div class="log${l.x ? ' cut' : ''}"><b>${esc(l.tag)}</b><span>${esc(l.text)}${l.x ? ' (취소)' : ''}</span></div>`;
@@ -140,6 +143,7 @@ const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
   ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄우면 공 뽑기로 한 팀씩 뽑히는 모습을 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
+  ['농구 규칙 (농구만)', ['홈의 "종목·규칙"에서 파울 기록, 공격 제한 시간(24초), 8초 룰을 켜고 끕니다.', '"파울 (휘슬)"을 누르면 휘슬이 울리고 시계가 멈춥니다. 이어서 파울한 선수를 고르면 개인 파울과 팀 파울이 올라갑니다.', '개인 파울이 5개가 되면 퇴장 안내가 뜨고, 팀 파울이 5개째부터는 "자유투"가 표시됩니다.', '공격 팀을 누르면 24초와 8초를 세기 시작합니다. 공이 하프라인을 넘으면 "넘어옴"을 누릅니다. 시간이 다 되면 버저가 울리고 시계가 멈춥니다.', '전광판에서 소리를 들으려면 전광판 화면의 "소리 켜기"를 한 번 눌러 주세요.']],
   ['학생 화면과 전광판', ['"경기" 탭의 학생용 QR을 크게 띄워 보여 줍니다. 학생은 로그인 없이 보기만 합니다.', '학생 화면은 몇 초마다 새로 읽어서 5초쯤 늦게 바뀝니다.', '"전광판 모드"를 TV나 전자칠판에 띄우면 큰 점수판이 됩니다.', 'QR과 주소는 우리 학교 학생과 학부모에게만 공유해 주세요.']],
   ['함께 심판 보기', ['홈 오른쪽 위 "함께하는 선생님 · 초대"에서 초대 QR이나 코드를 보냅니다.', '선생님마다 경기 진행만, 팀 명단과 일정까지, 모든 설정까지 가운데 권한을 정합니다.']],
   ['대회가 끝나면', ['홈의 "개인 기록"에서 학생별 출전 · 득점 기록을 봅니다. 선생님만 볼 수 있고, 전광판에 띄워 보여 줄 수 있습니다.', '순위표는 학생 화면의 "경기 결과"에 함께 나옵니다.']],
@@ -415,6 +419,30 @@ async function syncBracket(gid) {
   if (Object.keys(up).length) await S.store.update(`t/${S.tid}/games`, up).catch(() => {});
 }
 
+// 농구: 공격 제한 시간·8초와 파울 단추
+function hoopBox(g, gr) {
+  const shot = L.usesShot(gr), fouls = L.usesFouls(gr);
+  if (!shot && !fouls) return '';
+  const now = S.store.now(), sec = (c) => Math.ceil(L.tLeft(c, now) / 1000), full = Math.round(L.shotMs(gr) / 1000);
+  const shotRow = shot ? `<div class="card p stack" style="gap:8px"><div class="row between"><span class="label">공격 제한 시간${g.poss ? ` · ${esc(teamName(g[g.poss]))} 공격` : ' · 공격 팀을 눌러 시작'}</span>${g.bc ? `<span class="row small bold" style="gap:6px">8초 <span class="num" style="font-size:20px" data-bc="${g.id}">${sec(g.bc)}</span><button class="btn sm" style="height:32px;padding:0 10px" data-act="gCross" data-id="${g.id}">넘어옴</button></span>` : ''}</div>
+<div class="row" style="gap:8px;align-items:center"><button class="btn sm blue grow${g.poss === 'a' ? ' primary' : ''}" data-act="gPoss" data-id="${g.id}" data-team="a">${esc(teamName(g.a))} 공격</button><b class="num shotnum" data-sc="${g.id}">${g.sc ? sec(g.sc) : full}</b><button class="btn sm orange grow${g.poss === 'b' ? ' primary' : ''}" data-act="gPoss" data-id="${g.id}" data-team="b">${esc(teamName(g.b))} 공격</button></div>
+<div class="grid2"><button class="btn sm" data-act="gShot" data-id="${g.id}" data-secs="${full}">${full}초로</button><button class="btn sm" data-act="gShot" data-id="${g.id}" data-secs="14">14초로</button></div>
+<span class="small muted">골이 들어가면 공격권이 자동으로 넘어갑니다. 시간이 다 되면 버저가 울리고 시계가 멈춥니다.</span></div>` : '';
+  const foulCol = (side) => { const n = g.tf[side][g.cur], max = L.tfMax(gr); return `<div class="card p stack" style="gap:6px"><div class="row between"><span class="label">${esc(teamName(g[side]))}</span><b style="font-size:15px${n >= max ? ';color:#B42318' : ''}">팀 파울 ${n}${n >= max ? ' · 자유투' : ''}</b></div><button class="btn sm" data-act="gFoul" data-id="${g.id}" data-team="${side}">파울 (휘슬)</button></div>`; };
+  return `<section class="stack" style="margin:10px 20px 0;gap:10px">${shotRow}${fouls ? `<div class="grid2">${foulCol('a')}${foulCol('b')}</div>` : ''}</section>`;
+}
+
+// 다른 기기에서 난 휘슬·버저를 이 기기에서도 울린다(전광판, 같은 경기를 보고 있는 선생님).
+function hearBuzz() {
+  if (MODE !== 'teacher' && MODE !== 'board') return;
+  const now = S.store.now(), open = MODE === 'teacher' ? (route().name === 'game' ? route().a : null) : '*';
+  for (const [id, g] of Object.entries((S.T && S.T.games) || {})) {
+    const b = g && g.buzz; if (!b || !(b.at > (S.heard || 0))) continue;
+    S.heard = b.at;
+    if ((open === '*' || open === id) && now - b.at < 4000 && now > (S.mute || 0)) Sound.play(b.k);
+  }
+}
+
 function controls(g, gr) {
   const n = L.partCount(gr, g), last = g.cur >= n - 1;
   const clockBtn = L.hasClock(gr) ? `<button class="btn primary" data-act="gClock" data-id="${g.id}"${g.clock.left <= 0 && !g.clock.run ? ' disabled' : ''}>${g.clock.run ? '일시 정지' : g.clock.left <= 0 ? '시간 종료' : '시계 시작'}</button>` : '';
@@ -486,7 +514,7 @@ function gameScreen(id) {
 <div><span class="name ta">${esc(teamName(g.a))}${role('a')}</span><span class="num big" data-score="a">${a}</span>${btns('a')}</div>
 <div><span class="name tb">${esc(teamName(g.b))}${role('b')}</span><span class="num big" data-score="b">${b}</span>${btns('b')}</div></div>${hint ? `<span class="note center">${hint}</span>` : ''}</section>`;
   const table = partsTable(g, gr);
-  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tieBox}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
+  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tieBox}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}${liveNow ? hoopBox(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
 }
 
 function subScreen(id, side) {
@@ -553,7 +581,11 @@ ${gr.detail ? `<div class="set"><span>공수 교대</span>${seg('rotate', gr.rot
 <div class="set"><span>교체 카드 <span class="muted">(팀마다 · 0은 제한 없음)</span></span>${stepper('cards', gr.cards, '장', 0, 20, '교체 카드')}</div>
 <div class="set"><span>나간 선수 다시 들어가기</span>${seg('reentry', gr.reentry ? 1 : 0, [[1, '허용'], [0, '금지']])}</div>
 ${L.canStep(gr) ? `<div class="set"><span>득점 단추</span>${seg('steps', gr.steps, [['1', '1점씩'], ['123', '1·2·3점']])}</div>` : ''}
-${L.isTimed(gr) ? `<div class="set"><span>어시스트 기록</span>${seg('assist', gr.assist ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>` : ''}</section>
+${L.isTimed(gr) ? `<div class="set"><span>어시스트 기록</span>${seg('assist', gr.assist ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>` : ''}
+${gr.sport === 'basket' && L.isTimed(gr) ? `<div class="set"><span>파울 기록 <span class="muted">(휘슬 · 시계 멈춤)</span></span>${seg('fouls', gr.fouls ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>
+${gr.fouls ? `<div class="set"><span>개인 파울 퇴장</span>${stepper('pfMax', L.pfMax(gr), '반칙', 2, 9, '개인 파울 퇴장')}</div><div class="set"><span>팀 파울 <span class="muted">(구간마다 · 이 개수째부터 자유투)</span></span>${stepper('tfMax', L.tfMax(gr), '개', 2, 15, '팀 파울')}</div>` : ''}
+<div class="set"><span>공격 제한 시간</span>${seg('shot', gr.shot ? 1 : 0, [[1, '사용'], [0, '안 함']])}</div>
+${gr.shot ? `<div class="set"><span>제한 시간</span>${stepper('shotSec', Math.round(L.shotMs(gr) / 1000), '초', 10, 40, '공격 제한 시간')}</div><div class="set"><span>8초 룰 <span class="muted">(하프라인 넘기)</span></span>${seg('eight', gr.eight ? 1 : 0, [[1, '사용'], [0, '안 함']])}</div>` : ''}` : ''}</section>
 ${f === 'innings' && gr.detail ? '<p class="note pad" style="padding-top:6px">타석 기록은 타석마다 결과(1루타, 땅볼 등)를 누르는 방식입니다. 루 상황이 전광판과 학생 화면에 보이고, 안타·타점·득점이 개인 기록에 쌓입니다. 두 팀 모두 선발 명단이 있어야 켜집니다.</p>' : ''}
 <p class="note pad" style="padding-top:6px">종목을 바꾸면 규칙이 그 종목 기본값으로 채워집니다. 이미 시작한 경기가 있을 때는 경기 방식을 바꾸지 않는 것이 좋습니다.</p>
 <div class="center"><button class="btn plain" data-act="delGradeAsk">${esc(gr.label)} 지우기</button></div>`;
@@ -600,6 +632,7 @@ ${owner ? '' : `<div class="center mt"><button class="btn plain" data-act="quitT
 // 개인 기록 표의 열. 타석 기록 학년, 어시스트를 쓰는 학년, 그 밖으로 나뉜다.
 const recCols = (gr) => (gr.format === 'innings' && gr.detail ? [['타석', 'ab'], ['안타', 'h'], ['타점', 'rbi'], ['득점', 'goals']]
   : L.isTimed(gr) && gr.assist ? [['출전', 'games'], ['득점', 'goals'], ['어시스트', 'as']]
+  : L.usesFouls(gr) ? [['출전', 'games'], ['득점', 'goals'], ['파울', 'pf']]
   : gr.format === 'dodge' ? [['출전', 'games'], ['아웃시킴', 'ko'], ['교체 투입', 'subIn']] : [['출전', 'games'], ['득점', 'goals'], ['교체 투입', 'subIn']]);
 const recMain = (gr) => (gr.format === 'dodge' ? 'ko' : 'goals');
 const recCells = (gr, r, tag) => recCols(gr).map(([, k]) => (k === recMain(gr) ? `<${tag === 'td' ? 'td><b' : 'b'}>${r[k]}</b>${tag === 'td' ? '</td>' : ''}` : `<${tag}>${r[k]}</${tag}>`)).join('');
@@ -710,7 +743,7 @@ function orderScreen() {
 function boardScreen() {
   if (!T().meta) return `<div class="board"><p>${S.loaded ? '대회를 찾을 수 없습니다.' : '불러오는 중입니다.'}</p></div>`;
   const all = gradeList().flatMap((g) => gamesOf(g.id));
-  const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px"><a class="pick row" href="${HOME}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div></div></div>`;
+  const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px">${!Sound.ready() && gradeList().some((x) => L.usesFouls(x) || L.usesShot(x)) ? '<button class="pick" data-act="soundOn">소리 켜기</button>' : ''}<a class="pick row" href="${HOME}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div></div></div>`;
   const d = T().display;
   const dgr = d && d.mode === 'draw' && (T().grades || {})[d.gid] ? { ...T().grades[d.gid], id: d.gid } : null;
   if (dgr && drawOrder(dgr)) {
@@ -733,9 +766,9 @@ function boardScreen() {
   const box = (side) => (byOrder ? `<div class="box ${side}"><div class="row between label"><span>타순</span>${Number(gr.cards) ? `<span>교체 카드 ${L.cardsLeft(g, gr, side)}장 남음</span>` : ''}</div><div style="line-height:1.8">${orderLine(side)}</div><div class="label">교체 선수 · ${lineupOf(g, side, 'bench').map((p) => `${esc(p.no)} ${esc(p.name)}`).join(' · ') || '-'}</div></div>` : boxPlain(side));
   const boxPlain = (side) => `<div class="box ${side}"><div class="row between label"><span>${g.status === 'ready' ? '선발' : '뛰는 중'}</span>${g.status !== 'ready' && Number(gr.cards) ? `<span>교체 카드 ${L.cardsLeft(g, gr, side)}장 남음</span>` : ''}</div><div>${(g.status === 'ready' ? preOn(g, side) : lineupOf(g, side, 'on')).map((p) => `${esc(p.no)} ${esc(p.name)}`).join(' · ') || '-'}</div><div class="label">교체 선수 · ${(g.status === 'ready' ? preBench(g, side) : lineupOf(g, side, 'bench')).map((p) => `${esc(p.no)} ${esc(p.name)}`).join(' · ') || '-'}</div></div>`;
   const logs = logsOf(g.id).filter((l) => !l.x).slice(0, 3);
-  const setBadge = (side) => (g.status === 'live' && (gr.format === 'dodge' || gr.format === 'sets') ? `<div class="setbadge">세트 ${side === 'a' ? g.sa : g.sb}</div>` : '');
+  const setBadge = (side) => (g.status === 'live' && (gr.format === 'dodge' || gr.format === 'sets') ? `<div class="setbadge">세트 ${side === 'a' ? g.sa : g.sb}</div>` : g.status === 'live' && L.usesFouls(gr) ? `<div class="setbadge${g.tf[side][g.cur] >= L.tfMax(gr) ? ' hot' : ''}">팀 파울 ${g.tf[side][g.cur]}</div>` : '');
   return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · ${g.no}경기${g.status === 'live' ? ` ${L.partName(gr, g.cur, g.half)}` : ` ${statusText(g)}`}${g.status === 'ready' && L.whenText(g) ? ` · ${esc(L.whenText(g))}` : ''}`)}
-<div class="mid"><div><div class="name ta">${esc(teamName(g.a))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.a}</div>${setBadge('a')}</div><div><div class="sub">${m.sub || ''}</div><div class="num clk">${g.status === 'ready' ? 'vs' : m.mid}</div>${g.status === 'live' && L.isDetail(g, gr) ? diamond(g, 170, true) : ''}${live.length > 1 ? `<button class="pick" data-act="boardNext">다른 경기 보기 (${live.length})</button>` : ''}</div><div><div class="name tb">${esc(teamName(g.b))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.b}</div>${setBadge('b')}</div></div>
+<div class="mid"><div><div class="name ta">${esc(teamName(g.a))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.a}</div>${setBadge('a')}</div><div><div class="sub">${m.sub || ''}</div><div class="num clk">${g.status === 'ready' ? 'vs' : m.mid}</div>${g.status === 'live' && L.usesShot(gr) && g.sc ? `<div class="shotc"><span class="num" data-sc="${g.id}">${Math.ceil(L.tLeft(g.sc, S.store.now()) / 1000)}</span>${g.poss ? `<span>${esc(teamName(g[g.poss]))} 공격</span>` : ''}</div>` : ''}${g.status === 'live' && L.isDetail(g, gr) ? diamond(g, 170, true) : ''}${live.length > 1 ? `<button class="pick" data-act="boardNext">다른 경기 보기 (${live.length})</button>` : ''}</div><div><div class="name tb">${esc(teamName(g.b))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.b}</div>${setBadge('b')}</div></div>
 <div class="low">${box('a')}<div class="box"><div class="label">경기 기록</div>${logs.map((l) => `<div><b>${esc(l.tag)}</b> ${esc(l.text)}</div>`).join('') || '<div class="label">-</div>'}</div>${box('b')}</div></div>`;
 }
 
@@ -786,6 +819,13 @@ function sheetHtml() {
   if (s.type === 'drawtest') {
     const gr = grade(), order = gr && drawOrder(gr); if (!order) return '';
     return `<div class="board drawtest" role="dialog" aria-label="추첨 연출 미리 보기"><div class="hd"><div><h1>추첨 연출 미리 보기</h1><p>이 화면에서만 보입니다. 전광판에는 띄우지 않습니다.</p></div><div class="row" style="gap:10px"><button class="pick" data-act="drawTestAgain">처음부터</button><button class="pick" data-act="closeSheet">닫기</button></div></div>${drawStage(gr, order, s.at)}</div>`;
+  }
+  if (s.type === 'foul') {
+    const g = gameOf(s.id); if (!g) return '';
+    const gr = T().grades[g.gid], max = L.pfMax(gr);
+    return `<div class="sheet" role="dialog" aria-label="파울 선수 고르기"><div><div class="label">${esc(teamName(g[s.team]))} 파울 · 시계를 멈췄습니다</div><h2>누가 파울을 했나요?</h2></div>
+<div class="grid2" style="gap:8px">${lineupOf(g, s.team, 'on').map((p) => { const n = L.foulsOf(g, s.team, p.pid); return `<button class="pl" style="height:60px;border-color:var(--ink);font-weight:700" data-act="foulPick" data-pid="${p.pid}"><b>${esc(p.no)}</b>${esc(p.name)}<span class="small" style="font-weight:500;color:${n >= max - 1 ? '#B42318' : 'var(--sub)'}"> 파울 ${n}</span></button>`; }).join('')}</div>
+<button class="btn dash" data-act="foulPick" data-pid="">선수 없이 팀 파울만</button><button class="btn" style="border:0;background:var(--bg)" data-act="closeSheet">파울 아님 (기록 안 함)</button></div>`;
   }
   if (s.type === 'win') {
     const g = gameOf(s.id); if (!g) return '';
@@ -868,7 +908,7 @@ function closeT() { S.off.forEach((f) => f()); S.off = []; S.T = null; S.M = {};
 function openT(tid) {
   closeT(); S.tid = tid; S.gid = null; S.teamId = null;
   if (MODE === 'teacher') localStorage.setItem(TID_KEY, tid);
-  S.off.push(S.store.on(`t/${tid}`, (v) => { S.T = v; S.loaded = true; if (MODE === 'teacher' && S.T && isOwner() && !S.code) loadCode(); render(); }));
+  S.off.push(S.store.on(`t/${tid}`, (v) => { S.T = v; S.loaded = true; if (MODE === 'teacher' && S.T && isOwner() && !S.code) loadCode(); hearBuzz(); render(); }));
   if (MODE === 'teacher') S.off.push(S.store.on(`m/${tid}`, (v) => { S.M = v || {}; render(); }));
 }
 async function loadCode() { try { S.code = ((await S.store.get(`s/${S.tid}`)) || {}).code || ''; render(); } catch { /* 주인만 읽을 수 있다 */ } }
@@ -968,7 +1008,7 @@ const actions = {
     await S.store.update(`t/${S.tid}`, up); S.gid = null;
     undoBar(`${gr.label}을(를) 지웠습니다.`, async () => { await S.store.update(`t/${S.tid}`, keep); S.gid = gid; render(true); toast(`${gr.label}을(를) 되돌렸습니다.`); });
   },
-  async setGrade(d) { const v = ['reentry', 'detail', 'keepRunners', 'assist', 'outDetail'].includes(d.key) ? d.val === '1' : d.val; await S.store.update(gradePath(), { [d.key]: v }); },
+  async setGrade(d) { const v = ['reentry', 'detail', 'keepRunners', 'assist', 'outDetail', 'fouls', 'shot', 'eight'].includes(d.key) ? d.val === '1' : d.val; await S.store.update(gradePath(), { [d.key]: v }); },
   async step(d) {
     const cur = Number(grade()[d.key]) || 0;
     const next = Math.min(Number(d.max), Math.max(Number(d.min), cur + Number(d.d)));
@@ -1068,6 +1108,28 @@ const actions = {
     return act(d.id, L.start);
   },
   gClock(d) { return act(d.id, L.toggleClock); },
+  // ----- 농구 -----
+  async gFoul(d) {
+    Sound.unlock(); Sound.whistle(); S.mute = S.store.now() + 2500;
+    openSheet({ type: 'foul', id: d.id, team: d.team });
+    await act(d.id, L.foulStop);
+  },
+  async foulPick(d) {
+    const s = S.sheet, g0 = gameOf(s.id), gr = T().grades[g0.gid]; S.sheet = null; render(true);
+    await act(s.id, (x, grd, ctx) => L.foul(x, grd, ctx, s.team, d.pid));
+    const g = gameOf(s.id), p = d.pid && playersOf(g[s.team]).find((x) => x.pid === d.pid);
+    if (p && L.fouledOut(g, gr, s.team, d.pid)) openSheet({ type: 'notice', title: `${p.no} ${p.name} ${L.pfMax(gr)}반칙 퇴장`, text: `개인 파울 ${L.pfMax(gr)}개가 되었습니다. "선수 교체"에서 다른 선수와 바꿔 주세요.` });
+  },
+  async foulUndo(d) {
+    const l = logsOf(d.id).find((x) => x.id === d.log); if (!l) return;
+    await S.store.update(`t/${S.tid}/logs/${d.id}/${l.id}`, { x: true });
+    await S.store.tx(`t/${S.tid}/games/${d.id}`, (g) => { L.unfoul(g, T().grades[g.gid], {}, l.team, l.pid, l.part); return JSON.parse(JSON.stringify(g)); });
+    toast('파울 기록을 취소했습니다.');
+  },
+  gPoss(d) { Sound.unlock(); return act(d.id, (x, gr, ctx) => L.possession(x, gr, ctx, d.team)); },
+  gShot(d) { return act(d.id, (x, gr, ctx) => L.shotSet(x, gr, ctx, Number(d.secs))); },
+  gCross(d) { return act(d.id, (x, gr) => L.crossed(x, gr)); },
+  soundOn() { Sound.unlock(); setTimeout(() => { Sound.whistle(); render(true); }, 150); },
   gNext(d) { return act(d.id, L.nextPart); },
   gEndAsk(d) { openSheet({ type: 'confirm', title: '경기를 끝낼까요?', text: '끝낸 경기는 다시 진행할 수 없습니다.', yes: '경기 종료', run: 'gEnd', id: d.id }); },
   gEnd() { const g = gameOf(S.sheet.id), gr = T().grades[g.gid]; const last = g.cur >= L.partCount(gr, g) - 1; return act(g.id, L.isTimed(gr) && last ? L.nextPart : L.endGame); },
@@ -1281,10 +1343,20 @@ function tick() {
       tick.busy = true; act(g.id, L.timeUp).finally(() => { tick.busy = false; });
     }
   }
+  // 농구 공격 제한 시간·8초: 숫자를 갱신하고, 선생님 화면에서는 0이 되면 위반으로 처리한다.
+  for (const el of document.querySelectorAll('[data-sc],[data-bc]')) {
+    const k = el.dataset.sc ? 'sc' : 'bc', g = gameOf(el.dataset[k]); if (!g || !g[k]) continue;
+    const left = L.tLeft(g[k], now), text = String(Math.ceil(left / 1000));
+    if (el.textContent !== text) el.textContent = text;
+    if (MODE === 'teacher' && g.status === 'live' && g[k].run && left <= 0 && !tick.busy2) {
+      tick.busy2 = true; act(g.id, L.shotUp).finally(() => { tick.busy2 = false; });
+    }
+  }
 }
 
 async function main() {
   document.addEventListener('click', (e) => {
+    Sound.unlock();
     const el = e.target.closest('[data-act]');
     if (el && !el.disabled && actions[el.dataset.act]) { if (el.tagName !== 'A') e.preventDefault(); Promise.resolve(actions[el.dataset.act](el.dataset, el)).catch((err) => toast(friendly(err))); return; }
     if (e.target.id === 'sheet') actions.closeSheet();

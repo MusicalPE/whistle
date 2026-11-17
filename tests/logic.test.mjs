@@ -455,3 +455,65 @@ test('득점 기록 고치기: 점수만 올린 기록에 나중에 선수와 �
   assert.equal(L.editGoal(fixed, c(9), 'p2', 'p2').apid, '');
   assert.throws(() => L.editGoal({ ...goal, x: true }, c(9), 'p2', ''));
 });
+
+test('농구 파울: 휘슬에 시계가 멈추고, 개인·팀 파울이 쌓이며, 5반칙 퇴장과 팀 파울 자유투를 알린다', () => {
+  const grade = L.gradeFromSport('basket', '6학년');
+  assert.deepEqual([grade.fouls, grade.shot, grade.eight, L.pfMax(grade), L.tfMax(grade)], [true, true, true, 5, 5]);
+  assert.equal(L.usesFouls(L.gradeFromSport('futsal', '6학년')), false);
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0));
+  L.foulStop(g, grade, ctxAt(10000));
+  assert.deepEqual([g.clock.run, g.clock.left, g.buzz.k], [false, 8 * 60000 - 10000, 'whistle']);
+  const logs = [];
+  for (let i = 1; i <= 5; i++) logs.push(...L.foul(g, grade, ctxAt(10000 + i), 'a', 'p1'));
+  assert.match(logs[0].text, /가팀 파울 · 1 선수1 \(개인 1 · 팀 1\)$/);
+  assert.match(logs[4].text, /\(개인 5 · 팀 5\) · 5반칙 퇴장 · 팀 파울, 이제부터 자유투/);
+  assert.deepEqual([L.foulsOf(g, 'a', 'p1'), g.tf.a[0], L.fouledOut(g, grade, 'a', 'p1'), L.fouledOut(g, grade, 'a', 'p2')], [5, 5, true, false]);
+  assert.match(L.foul(g, grade, ctxAt(10010), 'b', '')[0].text, /나팀 파울 \(팀 1\)$/);
+  L.unfoul(g, grade, {}, 'a', 'p1', 0);
+  assert.deepEqual([L.foulsOf(g, 'a', 'p1'), g.tf.a[0], L.fouledOut(g, grade, 'a', 'p1')], [4, 4, false]);
+  // 팀 파울은 구간마다 새로 센다
+  L.nextPart(g, grade, ctxAt(20000));
+  assert.deepEqual([g.cur, g.tf.a[0], g.tf.a[1], L.foulsOf(g, 'a', 'p1')], [1, 4, 0, 4]);
+  const rec = Object.fromEntries(L.records({ ta: { name: '가팀', players: ctxAt(0).rosters.a }, tb: { name: '나팀', players: ctxAt(0).rosters.b } }, [g], { x: Object.fromEntries(logs.slice(0, 4).map((l, i) => [`l${i}`, l])) }).map((r) => [r.key, r]));
+  assert.equal(rec['ta/p1'].pf, 4);
+});
+
+test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞춰 돌고, 0이 되면 버저와 함께 시계가 멈춘다', () => {
+  const grade = L.gradeFromSport('basket', '6학년');
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0));
+  assert.equal(g.sc, undefined);
+  L.possession(g, grade, ctxAt(1000), 'a');
+  assert.deepEqual([g.poss, g.sc.run, L.tLeft(g.sc, 6000), L.tLeft(g.bc, 6000)], ['a', true, 19000, 3000]);
+  L.crossed(g, grade);
+  assert.equal(g.bc, undefined);
+  // 일시 정지하면 함께 멈추고, 다시 시작하면 이어서 돈다
+  L.toggleClock(g, grade, ctxAt(11000));
+  assert.deepEqual([g.clock.run, g.sc.run, g.sc.left], [false, false, 14000]);
+  L.toggleClock(g, grade, ctxAt(50000));
+  assert.deepEqual([g.sc.run, L.tLeft(g.sc, 54000)], [true, 10000]);
+  // 골이 들어가면 공격권이 넘어가고 24초·8초를 새로 센다
+  L.score(g, grade, ctxAt(55000), 'a', 2, 'p1');
+  assert.deepEqual([g.poss, L.tLeft(g.sc, 55000), L.tLeft(g.bc, 55000)], ['b', 24000, 8000]);
+  L.shotSet(g, grade, ctxAt(56000), 14);
+  assert.equal(L.tLeft(g.sc, 56000), 14000);
+  // 8초 위반이 먼저
+  assert.deepEqual(L.shotUp(g, grade, ctxAt(60000)), []);
+  const v8 = L.shotUp(g, grade, ctxAt(63000));
+  assert.match(v8[0].text, /나팀 8초 위반 · 가팀 공/);
+  assert.deepEqual([g.clock.run, g.sc.run, g.bc, g.buzz.k], [false, false, undefined, 'buzzer']);
+  assert.deepEqual(L.shotUp(g, grade, ctxAt(64000)), [], '두 번 불러도 한 번만');
+  // 24초 위반
+  L.possession(g, grade, ctxAt(70000), 'a'); L.crossed(g, grade); L.toggleClock(g, grade, ctxAt(70000));
+  const v24 = L.shotUp(g, grade, ctxAt(94000));
+  assert.match(v24[0].text, /가팀 24초 위반 · 나팀 공/);
+  assert.equal(g.clock.run, false);
+  // 구간이 바뀌거나 경기가 끝나면 지운다
+  L.nextPart(g, grade, ctxAt(95000));
+  assert.deepEqual([g.sc, g.bc, g.poss], [undefined, undefined, undefined]);
+  // 8초 룰을 끄면 24초만
+  const g2 = { id: 'y', ...L.newGame('g6', 2, 'ta', 'tb') }, no8 = { ...grade, eight: false };
+  L.start(g2, no8, ctxAt(0)); L.possession(g2, no8, ctxAt(0), 'b');
+  assert.deepEqual([g2.bc, L.tLeft(g2.sc, 0)], [undefined, 24000]);
+});

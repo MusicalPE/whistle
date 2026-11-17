@@ -819,6 +819,85 @@ try {
     assert.match(await text(s), /스위스 순위[\s\S]*결선 대진[\s\S]*준결승 1/);
   });
 
+  await step('농구: 파울(휘슬·시계 멈춤·개인/팀 파울·5반칙), 공격 제한 시간과 8초, 전광판 표시', async () => {
+    await t.setViewportSize({ width: 390, height: 844 });
+    await addGrade('농구반', 'basket');
+    await t.goto(`${base}#rules`);
+    await t.waitForSelector('text=파울 기록');
+    assert.match(await text(t), /개인 파울 퇴장[\s\S]*5반칙[\s\S]*팀 파울[\s\S]*5개[\s\S]*공격 제한 시간[\s\S]*24초[\s\S]*8초 룰/);
+    await t.getByRole('button', { name: '개인 파울 퇴장 줄이기' }).click();
+    await t.getByRole('button', { name: '개인 파울 퇴장 줄이기' }).click();
+    await t.waitForSelector('text=3반칙');
+    await t.goto(`${base}#teams`);
+    await t.waitForSelector('text=+ 팀 추가');
+    await addTeam('농구 가', ['1 가람', '2 나래', '3 다온', '4 라온', '5 마루', '6 바다']);
+    await addTeam('농구 나', ['1 사랑', '2 아름', '3 자람', '4 차오', '5 큰솔', '6 타래']);
+    await t.goto(`${base}#games`);
+    await t.getByRole('button', { name: '+ 경기 추가' }).click(); await sbtn(t, '추가').click();
+    await t.locator('a.game:not(.other)').last().click();
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('text=공격 제한 시간');
+    const hoopHash = await t.evaluate(() => location.hash);
+    const running = () => t.evaluate(() => /일시 정지/.test(document.querySelector('[data-act="gClock"]').textContent));
+    assert.equal(await running(), true);
+    // 공격권: 24초와 8초가 돈다
+    await t.locator('[data-act="gPoss"][data-team="a"]').click();
+    await t.waitForSelector('[data-bc]');
+    assert.match(await text(t), /농구 가 공격/);
+    assert.ok(Number(await t.locator('[data-sc]').innerText()) >= 23);
+    await btn(t, '넘어옴').click();
+    await t.waitForFunction(() => !document.querySelector('[data-bc]'));
+    await btn(t, '14초로').click();
+    await t.waitForFunction(() => Number(document.querySelector('[data-sc]').textContent) <= 14);
+    // 파울: 누르자마자 시계가 멈추고 선수를 고른다
+    await t.locator('[data-act="gFoul"][data-team="b"]').click();
+    await t.waitForSelector('text=누가 파울을 했나요?');
+    await t.waitForFunction(() => /시계 시작/.test(document.querySelector('[data-act="gClock"]').textContent));
+    const scStop = await t.locator('[data-sc]').innerText();
+    await t.locator('#sheet .pl').first().click();
+    await t.waitForSelector('text=농구 나 파울 · 1 사랑 (개인 1 · 팀 1)');
+    await t.waitForTimeout(1200);
+    assert.equal(await t.locator('[data-sc]').innerText(), scStop, '멈춘 동안에는 공격 제한 시간도 멈춤');
+    await shot(t, '45-hoop');
+    // 같은 선수 3반칙(설정) → 퇴장 안내, 팀 파울 3
+    for (let i = 0; i < 2; i++) { await t.locator('[data-act="gFoul"][data-team="b"]').click(); await t.locator('#sheet .pl').first().click(); await t.waitForFunction((n) => new RegExp(`팀 파울 ${n}`).test(document.body.innerText), i + 2); }
+    await t.waitForSelector('text=1 사랑 3반칙 퇴장');
+    await sbtn(t, '확인').click();
+    assert.match(await text(t), /개인 3 · 팀 3\) · 3반칙 퇴장/);
+    // 파울 취소
+    await t.locator('button.log.edit[data-act="foulUndo"]').first().click();
+    await t.waitForFunction(() => /팀 파울 2/.test(document.body.innerText) && /\(취소\)/.test(document.body.innerText));
+    // 선수 없이 팀 파울만, 팀 파울 5개째부터 자유투
+    for (let i = 3; i <= 5; i++) { await t.locator('[data-act="gFoul"][data-team="b"]').click(); await sbtn(t, '선수 없이 팀 파울만').click(); await t.waitForFunction((n) => new RegExp(`팀 파울 ${n}`).test(document.body.innerText), i); }
+    assert.match(await text(t), /팀 파울 5 · 자유투/);
+    // 골이 들어가면 공격권이 넘어간다
+    await btn(t, '시계 시작').click();
+    await t.locator('[data-act="gPlus"][data-team="a"][data-pts="2"]').click();
+    await t.locator('#sheet .pl').first().click();
+    await t.waitForFunction(() => /농구 나 공격/.test(document.body.innerText));
+    // 8초 위반: 버저와 함께 시계가 멈추고 기록이 남는다
+    await t.waitForFunction(() => /농구 나 8초 위반 · 농구 가 공/.test(document.body.innerText), null, { timeout: 15000 });
+    assert.equal(await running(), false);
+    // 전광판: 팀 파울과 공격 제한 시간
+    await b.goto(`${base}?b=${tid}`);
+    await b.waitForSelector('.board .setbadge');
+    assert.match(await b.locator('.board').innerText(), /팀 파울 0[\s\S]*팀 파울 5/);
+    assert.equal(await b.locator('.board .setbadge.hot').count(), 1);
+    assert.equal(await b.locator('.board .shotc').count(), 1);
+    await shot(b, '46-hoop-board');
+    // 개인 기록에 파울
+    await t.goto(`${base}#records`);
+    await t.waitForSelector('.tbl button.tr');
+    assert.match(await text(t), /파울/);
+    // 파울 기록을 끄면 단추가 사라진다
+    await t.goto(`${base}#rules`);
+    await t.locator('[data-act="setGrade"][data-key="fouls"][data-val="0"]').click();
+    await t.locator('[data-act="setGrade"][data-key="shot"][data-val="0"]').click();
+    await t.goto(`${base}${hoopHash}`);
+    await t.waitForSelector('[data-act="gPlus"]');
+    assert.equal(await t.locator('[data-act="gFoul"], [data-act="gPoss"]').count(), 0);
+  });
+
   await step('사용 안내: 대회 안과 대회 목록에서 간략 사용법 열기', async () => {
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);

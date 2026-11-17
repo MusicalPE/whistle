@@ -26,7 +26,7 @@ export function startBalls(canvas, names, at, now) {
     const dpr = Math.min(2, window.devicePixelRatio || 1), w = canvas.clientWidth, h = canvas.clientHeight;
     if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-    const t = (now() - at) / 1000, S = Math.min(w, h), cx = w / 2, cy = h * 0.6, R = S * 0.34, br = Math.max(10, R * 0.2);
+    const t = (now() - at) / 1000, S = Math.min(w, h), cx = w / 2, cy = h * 0.55, R = S * 0.3, br = Math.max(10, R * 0.2);
     const k = Math.floor((t - LEAD) / STEP), into = t - LEAD - k * STEP;      // k번째 팀 차례, 그 차례가 시작되고 지난 시간
     const cur = t < LEAD ? -1 : Math.min(k, n);
     const over = cur >= n;
