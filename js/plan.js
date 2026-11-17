@@ -38,6 +38,7 @@ export function normPlan(plan, n) {
   if (p.mode === 'groups') p.adv = clamp(p.adv, 1, Math.max(1, Math.floor(n / p.groups) - 0));
   else if (p.mode === 'ring') p.adv = clamp(p.adv, 2, Math.max(2, n - 1));
   p.third = !!p.third;
+  p.show = p.show === 'pop' ? 'pop' : 'balls';   // 전광판 추첨 연출: 공 뽑기(기본) / 이름만
   return p;
 }
 

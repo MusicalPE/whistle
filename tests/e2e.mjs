@@ -652,12 +652,37 @@ try {
     await t.locator('.dring .dteam').nth(1).click();
     await t.waitForFunction((x) => document.querySelector('.dring .dteam').textContent === x, before[1]);
     assert.deepEqual((await seat()).slice(0, 2), [before[1], before[0]], '두 팀을 누르면 자리가 바뀜');
+    // 추첨 연출 미리 보기: 전광판에 띄우지 않고 이 화면에서만
+    await btn(t, '이 화면에서 추첨 연출 미리 보기').click();
+    await t.waitForSelector('#sheet #drawballs');
+    assert.equal(await t.locator('#sheet .dteam').count(), 5);
+    await t.waitForTimeout(600); await shot(t, '38b-draw-test');
+    await t.locator('#sheet [data-act="drawTestAgain"]').click();
+    await t.waitForSelector('#sheet #drawballs');
+    await t.locator('#sheet [data-act="closeSheet"]').click();
+    assert.equal(await t.locator('#drawballs').count(), 0);
     await btn(t, '전광판에 추첨 띄우기').click();
     await b.goto(`${base}?b=${tid}`);
     await b.waitForSelector('.drawbox .dteam');
     assert.equal(await b.locator('.drawbox .dteam').count(), 5);
     assert.match(await b.locator('.drawbox').innerText(), /원형 예선 \+ 결선 추첨/);
-    await b.waitForTimeout(1500); await shot(b, '38-draw-board'); await shot(t, '39-plan');
+    // 공 뽑기 연출: 그림판에 공이 그려지고, 차례가 되면 오른쪽 결과에 팀이 뜬다
+    await b.waitForSelector('#drawballs');
+    await b.waitForTimeout(700);
+    const painted = () => b.evaluate(() => { const c = document.getElementById('drawballs'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4000) if (d[i]) n++; return n; });
+    assert.ok(await painted() > 5, '공 뽑기 그림이 그려져야 함');
+    const shown = () => b.evaluate(() => [...document.querySelectorAll('.drawbox .dteam')].filter((x) => Number(getComputedStyle(x).opacity) > 0.5).length);
+    assert.equal(await shown(), 0, '처음에는 아무 팀도 안 보임');
+    await shot(b, '38a-balls-start');
+    await b.waitForTimeout(5600);
+    assert.equal(await shown(), 1, '첫 공이 나오면 한 팀이 보임');
+    await shot(b, '38-draw-board'); await shot(t, '39-plan');
+    await b.reload(); await b.waitForSelector('#drawballs'); await b.waitForTimeout(600);
+    assert.ok(await shown() >= 1, '전광판을 새로 열어도 이어서 보임');
+    await btn(t, '이름만').click();
+    await b.waitForFunction(() => !document.getElementById('drawballs') && document.querySelectorAll('.drawbox .dteam').length === 5);
+    await btn(t, '공 뽑기').click();
+    await b.waitForSelector('#drawballs');
     await btn(t, '전광판 추첨 닫기').click();
     await b.waitForFunction(() => !document.querySelector('.drawbox'));
     await btn(t, '이대로 경기 6개 짜기').click();

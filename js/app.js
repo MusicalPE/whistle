@@ -2,6 +2,7 @@
 import { VERSION } from './version.js';
 import * as L from './logic.js';
 import * as P from './plan.js';
+import * as DS from './drawshow.js';
 import { createStore, forceDemo, CONFIGURED, TRY, TID_KEY } from './store.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -137,7 +138,7 @@ function qrSvg(url) {
 const helpBtn = (cls = '') => `<button class="helpbtn ${cls}" data-act="help"><span class="q" aria-hidden="true">?</span>사용 안내</button>`;
 const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
-  ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄워 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
+  ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄우면 공 뽑기로 한 팀씩 뽑히는 모습을 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
   ['학생 화면과 전광판', ['"경기" 탭의 학생용 QR을 크게 띄워 보여 줍니다. 학생은 로그인 없이 보기만 합니다.', '학생 화면은 몇 초마다 새로 읽어서 5초쯤 늦게 바뀝니다.', '"전광판 모드"를 TV나 전자칠판에 띄우면 큰 점수판이 됩니다.', 'QR과 주소는 우리 학교 학생과 학부모에게만 공유해 주세요.']],
   ['함께 심판 보기', ['홈 오른쪽 위 "함께하는 선생님 · 초대"에서 초대 QR이나 코드를 보냅니다.', '선생님마다 경기 진행만, 팀 명단과 일정까지, 모든 설정까지 가운데 권한을 정합니다.']],
@@ -307,10 +308,10 @@ const drawOrder = (gr) => { const ids = planTeams(gr.id), o = Array.isArray((gr.
 const planOf = (gr) => P.normPlan(gr.plan, planTeams(gr.id).length);
 
 // 추첨 결과 그림. at 이 있으면 그 시각부터 한 팀씩 차례로 나타난다(전광판 추첨).
-function drawView(gr, order, at) {
-  const plan = planOf(gr), n = order.length, step = 1.3;
+function drawView(gr, order, at, step = 1.3, lead = 1) {
+  const plan = planOf(gr), n = order.length;
   const el = at ? (S.store.now() - at) / 1000 : 1e6;
-  const chip = (t, extra = '') => { const i = order.indexOf(t); return `<button class="dteam${S.swap === t ? ' on' : ''}${at ? ' pop' : ''}" ${at ? `style="animation-delay:${(i * step - el + 1).toFixed(2)}s"` : ''} data-act="swapTeam" data-team="${t}"${at ? ' disabled' : ''}>${extra}${esc(teamName(t))}</button>`; };
+  const chip = (t, extra = '') => { const i = order.indexOf(t); return `<button class="dteam${S.swap === t ? ' on' : ''}${at ? ' pop' : ''}" ${at ? `style="animation-delay:${(i * step - el + lead).toFixed(2)}s"` : ''} data-act="swapTeam" data-team="${t}"${at ? ' disabled' : ''}>${extra}${esc(teamName(t))}</button>`; };
   if (plan.mode === 'groups') {
     return `<div class="dgroups" style="grid-template-columns:repeat(${Math.min(plan.groups, 4)},minmax(0,1fr))">${P.groupsOf(plan, order).map((ids, g) => `<div class="dgroup"><b>${P.groupName(g)}</b>${ids.map((t) => chip(t)).join('')}</div>`).join('')}</div>`;
   }
@@ -326,6 +327,14 @@ function drawView(gr, order, at) {
   }
   if (plan.mode === 'swiss') return `<div class="dcup">${Array.from({ length: Math.floor(n / 2) }, (_, i) => `<div class="dpair"><span class="label">스위스 1R</span>${chip(order[i * 2])}<span class="muted">vs</span>${chip(order[i * 2 + 1])}</div>`).join('')}</div>`;
   return `<div class="dcup"><div class="dpair">${order.map((t) => chip(t)).join('')}</div></div>`;
+}
+
+// 추첨 연출 한 판(전광판과 미리 보기에서 함께 쓴다). 공 뽑기면 왼쪽에 그림판, 오른쪽에 결과가 차례로 뜬다.
+function drawStage(gr, order, at) {
+  const info = P.planInfo(gr.plan, order.length);
+  if (info.plan.show !== 'balls') return `<div class="drawbox"><h2>${esc(P.MODES[info.plan.mode])} 추첨</h2>${drawView(gr, order, at)}<p class="sub">${esc(info.text)}</p></div>`;
+  const names = esc(JSON.stringify(order.map((t) => teamName(t))));
+  return `<div class="drawbox balls"><h2>${esc(P.MODES[info.plan.mode])} 추첨</h2><div class="drawrow"><canvas id="drawballs" data-at="${at}" data-names="${names}" aria-label="공 뽑기 추첨"></canvas><div class="drawres">${drawView(gr, order, at, DS.STEP, DS.LEAD + DS.LAND)}</div></div><p class="sub">${esc(info.text)}</p></div>`;
 }
 
 function groupTables(gr) {
@@ -361,11 +370,12 @@ function planScreen() {
   const ids = planTeams(gr.id), n = ids.length, info = P.planInfo(gr.plan, n), plan = info.plan, staged = stagedOf(gr.id), order = drawOrder(gr);
   const showing = T().display && T().display.mode === 'draw' && T().display.gid === gr.id;
   const boardBtn = `<button class="btn sm" data-act="drawBoard">${showing ? '전광판 추첨 닫기' : '전광판에 추첨 띄우기'}</button>`;
+  const testBtn = '<button class="btn sm" data-act="drawTest">이 화면에서 추첨 연출 미리 보기</button>';
   let body;
   if (staged.length) {
     const started = staged.some((g) => g.status !== 'ready');
     body = `<div class="card p stack"><b>${esc(P.MODES[plan.mode])}</b><span class="note">${esc(info.text)}</span><span class="small muted">편성된 경기 ${staged.length}개는 "경기" 탭에 있습니다. ${plan.mode === 'swiss' ? '한 라운드가 모두 끝나면 승패가 같은 팀끼리 추첨해 다음 라운드를 자동으로 짭니다. 이미 만난 팀은 되도록 피합니다.' : '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다.'}</span>
-<div class="grid2">${order && plan.mode !== 'league' ? boardBtn : ''}<button class="btn sm" data-act="planSync">${plan.mode === 'swiss' ? '다음 라운드 · 결선 짜기' : '결선 자리 다시 채우기'}</button></div></div>
+${order && plan.mode !== 'league' ? testBtn : ''}<div class="grid2">${order && plan.mode !== 'league' ? boardBtn : ''}<button class="btn sm" data-act="planSync">${plan.mode === 'swiss' ? '다음 라운드 · 결선 짜기' : '결선 자리 다시 채우기'}</button></div></div>
 ${groupTables(gr)}${swissBox(gr)}${bracketList(gr)}
 <button class="btn plain" data-act="planClearAsk">${started ? '시작하지 않은 편성 경기 지우기' : '편성 지우고 다시 짜기'}</button>`;
   } else {
@@ -379,7 +389,8 @@ ${info.ent >= 4 ? `<div class="set"><span>3·4위전</span><div class="seg"><but
 <div class="card p stack"><span class="label">이렇게 짜집니다 · ${n}팀</span>${ok ? `<b>${esc(info.text)}</b><span class="small muted">모두 ${info.total}경기${info.ent ? ' · 결선이 동점으로 끝나면 연장을 열거나 승자를 고릅니다' : ''}</span>` : `<b style="color:#B42318">${esc(info.problems[0])}</b>`}</div>
 ${ok && plan.mode !== 'league' ? `<div class="card p stack"><div class="row between"><b>추첨</b>${order ? '<span class="small muted">두 팀을 차례로 누르면 자리를 바꿉니다</span>' : ''}</div>
 ${order ? drawView(gr, order) : '<span class="note">팀을 무작위로 섞어 자리에 넣습니다.</span>'}
-<div class="grid2"><button class="btn sm ${order ? '' : 'primary'}" data-act="planDraw">${order ? '다시 뽑기' : '추첨하기'}</button>${order ? boardBtn : ''}</div></div>` : ''}
+<div class="set" style="padding:0"><span class="small">전광판 연출</span><div class="seg"><button class="${plan.show === 'balls' ? 'on' : ''}" data-act="planSet" data-key="show" data-val="balls">공 뽑기</button><button class="${plan.show === 'pop' ? 'on' : ''}" data-act="planSet" data-key="show" data-val="pop">이름만</button></div></div>
+<div class="grid2"><button class="btn sm ${order ? '' : 'primary'}" data-act="planDraw">${order ? '다시 뽑기' : '추첨하기'}</button>${order ? boardBtn : ''}</div>${order ? testBtn : ''}</div>` : ''}
 ${ok ? `<button class="btn primary big" data-act="planMake"${plan.mode !== 'league' && !order ? ' disabled' : ''}>${plan.mode !== 'league' && !order ? '추첨한 뒤 경기를 짤 수 있습니다' : `이대로 경기 ${info.total}개 짜기`}</button>` : ''}
 ${gamesOf(gr.id).length ? `<p class="note">지금 있는 경기 ${gamesOf(gr.id).length}개는 그대로 두고 그 뒤에 이어서 짭니다.</p>` : ''}`;
   }
@@ -704,7 +715,7 @@ function boardScreen() {
   const dgr = d && d.mode === 'draw' && (T().grades || {})[d.gid] ? { ...T().grades[d.gid], id: d.gid } : null;
   if (dgr && drawOrder(dgr)) {
     const gr = dgr, order = drawOrder(gr), info = P.planInfo(gr.plan, order.length);
-    return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · 추첨`)}<div class="drawbox"><h2>${esc(P.MODES[info.plan.mode])} 추첨</h2>${drawView(gr, order, d.at || 1)}<p class="sub">${esc(info.text)}</p></div></div>`;
+    return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · 추첨`)}${drawStage(gr, order, d.at || 1)}</div>`;
   }
   if (d && d.mode === 'records' && (T().grades || {})[d.gid]) {
     S.gid = d.gid;
@@ -772,6 +783,10 @@ function sheetHtml() {
     return `<div class="sheet" role="dialog" aria-label="같은 득점 확인"><h2>방금 ${esc(teamName(g[s.team]))} 득점이 기록됐습니다.</h2><p class="note" style="font-size:14px">다른 선생님이 이미 올린 득점일 수 있습니다. 한 번 더 올릴까요?</p>
 <button class="btn primary big" data-act="closeSheet">올리지 않기</button><button class="btn" data-act="dupYes">새 득점이 맞음 · 한 번 더 올리기</button></div>`;
   }
+  if (s.type === 'drawtest') {
+    const gr = grade(), order = gr && drawOrder(gr); if (!order) return '';
+    return `<div class="board drawtest" role="dialog" aria-label="추첨 연출 미리 보기"><div class="hd"><div><h1>추첨 연출 미리 보기</h1><p>이 화면에서만 보입니다. 전광판에는 띄우지 않습니다.</p></div><div class="row" style="gap:10px"><button class="pick" data-act="drawTestAgain">처음부터</button><button class="pick" data-act="closeSheet">닫기</button></div></div>${drawStage(gr, order, s.at)}</div>`;
+  }
   if (s.type === 'win') {
     const g = gameOf(s.id); if (!g) return '';
     return `<div class="sheet" role="dialog" aria-label="승자 고르기"><div><div class="label">${esc(g.label || '')} · ${g.sa} : ${g.sb} 동점</div><h2>어느 팀이 올라가나요?</h2></div>
@@ -838,7 +853,11 @@ function render(force) {
   S.dirty = false;
   const y = window.scrollY;
   document.getElementById('app').innerHTML = screenHtml();
+  // 전광판 공 뽑기: 그림판이 있으면 연출을 (다시) 시작한다. 시각만으로 그리므로 다시 시작해도 장면이 이어진다.
   document.getElementById('sheet').innerHTML = sheetHtml();
+  if (render.stopDraw) { render.stopDraw(); render.stopDraw = null; }
+  const dc = document.getElementById('drawballs');
+  if (dc) { try { render.stopDraw = DS.startBalls(dc, JSON.parse(dc.dataset.names), Number(dc.dataset.at), () => S.store.now()); } catch (e) { /* 그림이 안 되면 오른쪽 결과만 보인다 */ } }
   window.scrollTo(0, y);
 }
 const openSheet = (s) => { S.sheet = s; render(true); const el = document.querySelector('#sheet input, #sheet textarea'); if (el) el.focus(); };
@@ -978,6 +997,8 @@ const actions = {
     [order[a], order[b]] = [order[b], order[a]];
     return S.store.update(`${gradePath()}/plan`, { order });
   },
+  drawTest() { openSheet({ type: 'drawtest', at: S.store.now() }); },
+  drawTestAgain() { S.sheet.at = S.store.now(); render(true); },
   drawBoard() { const gr = grade(), on = T().display && T().display.mode === 'draw' && T().display.gid === gr.id; return S.store.set(`t/${S.tid}/display`, on ? null : { mode: 'draw', gid: gr.id, at: S.store.now() }); },
   async planMake() {
     const gr = grade(), plan = planOf(gr), ids = planTeams(gr.id);
