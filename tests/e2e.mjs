@@ -611,6 +611,85 @@ try {
     assert.ok(m.width > 380 && m.height < 70, `폰에서는 메뉴가 아래 가로로 있어야 함 ${JSON.stringify(m)}`);
   });
 
+  await step('기록지: 학교급 고르기, 인쇄 화면, 전·후반에 맞춘 양식, 점수만 모드, 경기 뒤 기록 입력', async () => {
+    const c3 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await c3.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    const d = await c3.newPage(); watch(d, '기록지');
+    await d.goto(`${base}?demo#settings`);
+    await d.waitForSelector('[data-act="setLevel"]');
+    assert.equal(await d.locator('[data-act="setLevel"].on').innerText(), '초등');
+    // 6학년 풋살: 모든 경기 기록지(초등용), 명단이 채워져 있다
+    await d.goto(`${base}?demo#games`);
+    await d.locator('[data-act="pickGrade"]', { hasText: '6학년' }).first().click();
+    await d.locator('a', { hasText: '기록지 모두 인쇄' }).click();
+    await d.waitForSelector('.pw .page');
+    const pagesN = await d.locator('.pw .page').count();
+    assert.ok(pagesN >= 2, '경기마다 한 장');
+    const p1 = await d.locator('.pw .page').first().innerText();
+    assert.match(p1, /풋살 기록지[\s\S]*초등용[\s\S]*햇살초 스포츠클럽 리그[\s\S]*막음/);
+    assert.ok(!/유효/.test(p1), '초등용에는 유효 슈팅 칸이 없다');
+    assert.ok((await d.locator('.pw .page').first().locator('td.nm').allInnerTexts()).filter(Boolean).length >= 5, '명단이 채워진다');
+    await shot(d, '60-print-elem');
+    // 한 쪽이 화면 폭 안에 들어온다(휴대폰에서 줄여서 보임)
+    const w = await d.evaluate(() => document.querySelector('.pw .page').getBoundingClientRect().width);
+    assert.ok(w <= 390, `기록지 폭 ${w}`);
+    // 중·고로 바꾸면 자세한 양식
+    await d.goto(`${base}?demo#settings`);
+    await d.locator('[data-act="setLevel"]', { hasText: '중 · 고' }).click();
+    await d.waitForFunction(() => document.querySelector('[data-act="setLevel"].on').textContent === '중 · 고');
+    await d.goto(`${base}?demo#print/blank`);
+    await d.waitForSelector('.pw .page');
+    assert.match(await d.locator('.pw .page').innerText(), /중 · 고용[\s\S]*유효/);
+    // 4학년 농구: 쿼터 → 전·후반으로 바꾸면 기록지 구간도 바뀐다
+    await d.goto(`${base}?demo#rules`);
+    await d.locator('[data-act="pickGrade"]', { hasText: '4학년' }).first().click();
+    await d.waitForSelector('#g-format');
+    await d.goto(`${base}?demo#print/blank`);
+    await d.waitForSelector('.pw .page');
+    assert.match(await d.locator('.pw .sc').innerText(), /1Q\s*2Q\s*3Q\s*4Q\s*연장/);
+    assert.match(await d.locator('.pw .page').innerText(), /자유투/);
+    await d.goto(`${base}?demo#rules`);
+    await d.selectOption('#g-format', 'halves');
+    await d.waitForFunction(() => document.querySelector('#g-format').value === 'halves');
+    await d.goto(`${base}?demo#print/blank`);
+    await d.waitForSelector('.pw .page');
+    assert.match(await d.locator('.pw .sc').innerText(), /전반\s*후반\s*연장/);
+    assert.ok(!/1Q/.test(await d.locator('.pw .page').innerText()));
+    await shot(d, '61-print-basket-halves');
+    // 점수만 모드: 6학년 풋살에서 + 를 누르면 선수 고르기 없이 바로 오른다
+    await d.goto(`${base}?demo#rules`);
+    await d.locator('[data-act="pickGrade"]', { hasText: '6학년' }).first().click();
+    await d.locator('[data-act="setGrade"][data-key="scoreOnly"][data-val="1"]').click();
+    await d.waitForSelector('[data-key="scoreOnly"][data-val="1"].on');
+    assert.equal(await d.locator('[data-key="assist"]').count(), 0, '점수만이면 어시스트 설정은 숨긴다');
+    await d.goto(`${base}?demo#games`);
+    await d.locator('a.game', { hasText: '진행 중' }).first().click();
+    await d.waitForSelector('[data-act="gPlus"]');
+    const s0 = Number(await d.locator('[data-score="a"]').innerText());
+    await d.locator('[data-act="gPlus"][data-team="a"]').click();
+    await d.waitForFunction((v) => Number(document.querySelector('[data-score="a"]').textContent) === v + 1, s0);
+    assert.equal(await d.locator('#sheet .sheet').count(), 0, '선수 고르기 창이 뜨지 않는다');
+    await d.locator('[data-act="gMinus"][data-team="a"]').click();
+    await d.waitForFunction((v) => Number(document.querySelector('[data-score="a"]').textContent) === v, s0);
+    // 경기 뒤 기록 입력: 적은 값이 저장되고 개인 기록에 들어간다
+    await d.locator('a', { hasText: '기록 입력' }).click();
+    await d.waitForSelector('.stat input');
+    assert.match(await d.locator('.stat thead').first().innerText(), /득점\s*도움\s*슈팅\s*유효 슈팅/);
+    const who = (await d.locator('.stat tbody tr').first().locator('td.l').innerText()).replace(/^\S+\s+/, '');
+    const inp = d.locator('.stat tbody tr').first().locator('input[data-k="sh"]');
+    await inp.fill('7'); await inp.blur();
+    await d.waitForFunction(() => /고치기/.test(document.body.innerText) || true);
+    await d.reload();
+    await d.waitForSelector('.stat input');
+    assert.equal(await d.locator('.stat tbody tr').first().locator('input[data-k="sh"]').inputValue(), '7');
+    await shot(d, '62-stats-entry');
+    await d.goto(`${base}?demo#records`);
+    await d.waitForSelector('.tbl button.tr');
+    await d.locator('.tbl button.tr', { hasText: who }).first().click();
+    await d.waitForFunction(() => /슈팅\s*7|7\s*슈팅/.test(document.querySelector('section.dark').innerText));
+    await c3.close();
+  });
+
   await step('체험용 미리보기(?demo): 지어낸 대회가 채워져 있고 평소 자료와 따로 저장', async () => {
     const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await c2.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());

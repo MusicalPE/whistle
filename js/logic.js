@@ -44,6 +44,7 @@ export function gradeFromSport(sport, label) {
     deuce: !!p.deuce, cap: p.cap || 0, serve: p.serve || '',
     // 쉬는 시간(분). 구간이 끝나면 자동으로 센다. 0은 없음. restHalf 는 쿼터제에서 2쿼터 뒤(하프타임), 0이면 rest 와 같게.
     rest: 0, restHalf: 0,
+    scoreOnly: false,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
     // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
@@ -54,7 +55,8 @@ export function gradeFromSport(sport, label) {
 export const sportName = (grade) => (grade.sport === 'custom' ? grade.sportName || '종목' : (SPORTS[grade.sport] || SPORTS.custom).name);
 export const isTimed = (grade) => grade.format in TIMED_NAMES;
 export const hasClock = (grade) => isTimed(grade) || grade.format === 'dodge';
-export const usesPicker = (grade) => isTimed(grade) || grade.format === 'innings';
+// scoreOnly: 경기 중에는 점수만 올리고 내린다(득점 선수는 고르지 않는다). 선수 기록은 경기 뒤 기록 입력표로 넣는다.
+export const usesPicker = (grade) => !grade.scoreOnly && (isTimed(grade) || grade.format === 'innings');
 // 1·2·3점 단추는 농구(와 직접 입력 종목)에서만 쓴다. 그 밖의 종목은 항상 1점씩.
 export const canStep = (grade) => isTimed(grade) && (grade.sport === 'basket' || grade.sport === 'custom');
 export const stepsOf = (grade) => (canStep(grade) && grade.steps === '123' ? [1, 2, 3] : [1]);
@@ -664,13 +666,14 @@ export function standings(teams, games) {
 }
 
 // 선수별 기록. games: [{id, ...경기}], logs: {경기id: {기록id: 기록}}
-export function records(teams, games, logs) {
+// pointsFrom(s): 경기 뒤 입력표에 적은 값에서 득점을 뽑는 함수(없으면 null). 입력표에 적은 값이 경기 중 기록보다 먼저다.
+export function records(teams, games, logs, pointsFrom = () => null) {
   const out = {};
   const row = (teamId, pid) => {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, pf: 0, yc: 0, rc: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, pf: 0, yc: 0, rc: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, x: {}, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -679,7 +682,9 @@ export function records(teams, games, logs) {
       const teamId = g[side]; const other = (teams[g[side === 'a' ? 'b' : 'a']] || {}).name || '';
       const st = (g.st || {})[side] || {};
       const cameIn = new Set(glogs.filter((l) => l.type === 'sub' && l.team === side).map((l) => l.pin));
-      const pids = new Set([...Object.keys(st), ...cameIn]);
+      const sheet = ((g.stats || {})[side]) || {};
+      const has = (v) => v !== undefined && v !== null && v !== '';
+      const pids = new Set([...Object.keys(st), ...cameIn, ...Object.keys(sheet).filter((pid) => Object.values(sheet[pid] || {}).some(has))]);
       for (const pid of pids) {
         const r = row(teamId, pid); if (!r) continue;
         const mine = glogs.filter((l) => l.team === side);
@@ -687,10 +692,12 @@ export function records(teams, games, logs) {
         const hits = pas.filter((l) => l.res in HIT);
         const runs = mine.filter((l) => (l.type === 'pa' || l.type === 'run') && Object.values(l.scored || {}).includes(pid)).length;
         const rbi = sum(pas.map((l) => l.rbi || 0)) + mine.filter((l) => l.type === 'run' && l.rbiTo === pid).length;
-        const goals = sum(mine.filter((l) => l.type === 'goal' && l.pid === pid).map((l) => l.pts || 1)) + runs;
+        const mySheet = sheet[pid] || {}, fromSheet = pointsFrom(mySheet);
+        const goals = fromSheet !== null && fromSheet !== undefined ? fromSheet : sum(mine.filter((l) => l.type === 'goal' && l.pid === pid).map((l) => l.pts || 1)) + runs;
         r.games++; if (st[pid]) r.starts++; else r.subIn++;
-        const assists = mine.filter((l) => l.type === 'goal' && l.apid === pid).length;
-        const kills = glogs.filter((l) => l.type === 'out' && l.team !== side && l.kpid === pid).length;
+        const assists = has(mySheet.as) ? Number(mySheet.as) || 0 : mine.filter((l) => l.type === 'goal' && l.apid === pid).length;
+        const kills = has(mySheet.ko) ? Number(mySheet.ko) || 0 : glogs.filter((l) => l.type === 'out' && l.team !== side && l.kpid === pid).length;
+        for (const [k, v] of Object.entries(mySheet)) if (has(v) && !['goals', 'pts', 'as', 'ko', 'pf'].includes(k)) r.x[k] = (r.x[k] || 0) + (Number(v) || 0);
         r.ko += kills;
         r.goals += goals; r.as += assists; r.ab += pas.length; r.h += hits.length; r.rbi += rbi;
         for (const l of hits) r[l.res] += 1;
@@ -698,7 +705,7 @@ export function records(teams, games, logs) {
         if (pas.length) bits.push(`${pas.length}타석 ${hits.length}안타${rbi ? ` ${rbi}타점` : ''}`);
         if (goals) bits.push(`${goals}${pas.length || runs ? '득점' : '점'}`);
         if (assists) bits.push(`어시스트 ${assists}`);
-        const fouls = mine.filter((l) => l.type === 'foul' && l.pid === pid).length;
+        const fouls = mine.filter((l) => l.type === 'foul' && l.pid === pid).length || (has(mySheet.pf) ? Number(mySheet.pf) || 0 : 0);
         r.pf += fouls;
         if (fouls) bits.push(`파울 ${fouls}`);
         const cards = mine.filter((l) => l.type === 'card' && l.pid === pid);
