@@ -517,3 +517,83 @@ test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞�
   L.start(g2, no8, ctxAt(0)); L.possession(g2, no8, ctxAt(0), 'b');
   assert.deepEqual([g2.bc, L.tLeft(g2.sc, 0)], [undefined, 24000]);
 });
+
+test('축구 경고·퇴장: 경고 두 번이면 퇴장, 퇴장 선수는 경기장에서 빠지고 교체로 못 들어온다, 취소하면 돌아온다', () => {
+  const grade = L.gradeFromSport('soccer', '6학년');
+  assert.deepEqual([grade.yr, L.usesCards(grade), L.usesCards(L.gradeFromSport('basket', '6'))], [true, true, false]);
+  const g = { id: 'x', ...L.newGame('g6', 1, 'ta', 'tb') };
+  const c = (now) => ctxAt(now, { rosters: { a: roster(10, 8), b: roster(10, 8) } });
+  L.start(g, grade, c(0));
+  const y1 = L.card(g, grade, c(1), 'a', 'p3', 'y')[0];
+  assert.deepEqual([y1.text, y1.color, y1.red, L.yellows(g, 'a', 'p3'), g.lineup.a.p3, g.buzz.k], ['가팀 경고 · 3 선수3', 'y', false, 1, 'on', 'whistle']);
+  const y2 = L.card(g, grade, c(2), 'a', 'p3', 'y')[0];
+  assert.deepEqual([y2.text, y2.red, L.sentOff(g, 'a', 'p3'), g.lineup.a.p3], ['가팀 경고 2회 퇴장 · 3 선수3', true, true, 'red']);
+  assert.throws(() => L.card(g, grade, c(3), 'a', 'p3', 'y'), /이미 퇴장/);
+  assert.throws(() => L.sub(g, grade, c(3), 'a', 'p3', 'p9'), /지금 뛰는 선수/);
+  const r = L.card(g, grade, c(4), 'b', 'p1', 'r')[0];
+  assert.deepEqual([r.text, r.color, r.red, g.lineup.b.p1], ['나팀 퇴장 · 1 선수1', 'r', true, 'red']);
+  const rec = Object.fromEntries(L.records({ ta: { name: '가팀', players: roster(10, 8) }, tb: { name: '나팀', players: roster(10, 8) } }, [g], { x: { a: y1, b: y2, c: r } }).map((x) => [x.key, x]));
+  assert.deepEqual([rec['ta/p3'].yc, rec['ta/p3'].rc, rec['tb/p1'].yc, rec['tb/p1'].rc], [2, 1, 0, 1]);
+  L.uncard(g, grade, {}, y2);
+  assert.deepEqual([L.yellows(g, 'a', 'p3'), L.sentOff(g, 'a', 'p3'), g.lineup.a.p3], [1, false, 'on']);
+  L.uncard(g, grade, {}, r);
+  assert.deepEqual([L.sentOff(g, 'b', 'p1'), g.lineup.b.p1], [false, 'on']);
+});
+
+test('배드민턴·탁구: 듀스와 상한 점수로 세트가 끝나고, 서브할 쪽을 알려 준다', () => {
+  const bad = L.gradeFromSport('badminton', '단식'), tt = L.gradeFromSport('tabletennis', '단식');
+  assert.deepEqual([bad.format, bad.sets, bad.setPoints, bad.cap, bad.deuce, bad.starters, tt.sets, tt.setPoints, tt.cap], ['sets', 3, 21, 30, true, 1, 5, 11, 0]);
+  const set = (grade, a, b) => L.setWon({ cur: 0, pa: [a], pb: [b] }, grade);
+  assert.deepEqual([set(bad, 21, 19), set(bad, 21, 20), set(bad, 22, 20), set(bad, 29, 29), set(bad, 30, 29), set(bad, 20, 15), set(bad, 19, 21)], ['a', '', 'a', '', 'a', '', 'b']);
+  assert.deepEqual([set(tt, 11, 9), set(tt, 11, 10), set(tt, 13, 11), set(tt, 10, 12), set({ ...tt, deuce: false }, 11, 10)], ['a', '', 'a', 'b', 'a']);
+  // 탁구 서브: 2점마다 교대, 10:10부터는 1점마다, 세트가 바뀌면 첫 서브가 바뀐다
+  const one = roster(1, 1), c = (now) => ctxAt(now, { rosters: { a: one, b: one } });
+  const g = { id: 'x', ...L.newGame('g', 1, 'ta', 'tb') };
+  L.start(g, tt, c(0));
+  const seq = [];
+  const pt = (side) => { L.score(g, tt, c(1), side, 1, ''); seq.push(L.server(g, tt)); };
+  assert.equal(L.server(g, tt), 'a');
+  for (let i = 0; i < 4; i++) pt('a');
+  assert.deepEqual(seq, ['a', 'b', 'b', 'a']);
+  for (let i = 0; i < 6; i++) pt('a'); for (let i = 0; i < 10; i++) pt('b');   // 10:10
+  assert.equal(L.server(g, tt), 'a');
+  pt('a'); assert.equal(L.server(g, tt), 'b');   // 11:10 듀스부터 1점마다
+  assert.throws(() => L.nextPart(g, tt, c(2)), /아직 세트가 끝나지 않았습니다/);
+  pt('a');
+  L.nextPart(g, tt, c(3));
+  assert.deepEqual([g.cur, g.sa, L.server(g, tt)], [1, 1, 'b']);
+  // 배드민턴 서브: 점수를 딴 쪽, 다음 세트는 앞 세트를 이긴 쪽
+  const h = { id: 'y', ...L.newGame('g', 2, 'ta', 'tb'), fs: 'b' };
+  L.start(h, bad, c(0));
+  assert.equal(L.server(h, bad), 'b');
+  L.score(h, bad, c(1), 'a', 1, ''); assert.equal(L.server(h, bad), 'a');
+  L.score(h, bad, c(1), 'b', 1, ''); assert.equal(L.server(h, bad), 'b');
+  for (let i = 0; i < 20; i++) L.score(h, bad, c(1), 'a', 1, '');
+  L.nextPart(h, bad, c(2));
+  assert.deepEqual([h.cur, L.server(h, bad)], [1, 'a']);
+});
+
+test('쉬는 시간: 구간이 끝나면 자동으로 세고, 시계를 시작하거나 점수가 나면 끝난다. 쿼터제는 2쿼터 뒤 하프타임을 따로', () => {
+  const grade = { ...L.gradeFromSport('netball', '5학년'), rest: 2, restHalf: 5 };
+  const g = { id: 'x', ...L.newGame('g', 1, 'ta', 'tb') };
+  L.start(g, grade, ctxAt(0));
+  L.nextPart(g, grade, ctxAt(1000));
+  assert.deepEqual([g.cur, g.rest.ms, L.restLeft(g, 61000)], [1, 120000, 60000]);
+  L.toggleClock(g, grade, ctxAt(70000));
+  assert.equal(g.rest, undefined);
+  L.nextPart(g, grade, ctxAt(80000));
+  assert.deepEqual([g.cur, g.rest.ms], [2, 300000], '2쿼터 뒤는 하프타임');
+  L.score(g, grade, ctxAt(81000), 'a', 1, '');
+  assert.equal(g.rest, undefined);
+  L.nextPart(g, grade, ctxAt(90000)); L.endRest(g, grade);
+  assert.equal(g.rest, undefined);
+  L.nextPart(g, grade, ctxAt(99000));
+  assert.deepEqual([g.status, g.rest], ['done', undefined], '경기가 끝나면 쉬는 시간은 없다');
+  // 0이면 세지 않는다. 세트제도 세트 사이에 센다.
+  const g0 = { id: 'y', ...L.newGame('g', 2, 'ta', 'tb') }, none = L.gradeFromSport('futsal', '6');
+  L.start(g0, none, ctxAt(0)); L.nextPart(g0, none, ctxAt(1));
+  assert.equal(g0.rest, undefined);
+  const v = { ...L.gradeFromSport('volley', '4'), rest: 1 }, gv = { id: 'z', ...L.newGame('g', 3, 'ta', 'tb') };
+  L.start(gv, v, ctxAt(0)); L.score(gv, v, ctxAt(1), 'a', 1, ''); L.nextPart(gv, v, ctxAt(2));
+  assert.deepEqual([gv.cur, gv.rest.ms], [1, 60000]);
+});

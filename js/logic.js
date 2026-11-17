@@ -3,10 +3,14 @@
 const ALL_FORMATS = ['halves', 'quarters', 'single', 'sets', 'innings', 'dodge'];
 
 export const SPORTS = {
-  futsal: { name: '풋살', format: 'halves', formats: ['halves', 'single'], minutes: 10, starters: 5, cards: 3, steps: '1', assist: true },
-  soccer: { name: '축구', format: 'halves', formats: ['halves', 'single'], minutes: 15, starters: 8, cards: 3, steps: '1', assist: true },
+  futsal: { name: '풋살', format: 'halves', formats: ['halves', 'single'], minutes: 10, starters: 5, cards: 3, steps: '1', assist: true, yr: true },
+  soccer: { name: '축구', format: 'halves', formats: ['halves', 'single'], minutes: 15, starters: 8, cards: 3, steps: '1', assist: true, yr: true },
   netball: { name: '넷볼', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 7, cards: 3, steps: '1' },
   basket: { name: '농구', format: 'quarters', formats: ['halves', 'quarters'], minutes: 8, starters: 5, cards: 5, steps: '123', fouls: true, shot: true, eight: true },
+  // 배드민턴·탁구: 단식(선발 1명)이나 복식(2명). deuce 는 2점 차로 이겨야 세트가 끝남, cap 은 그 점수에 먼저 닿으면 끝(0은 없음).
+  // serve: rally 는 점수를 딴 쪽이 서브(배드민턴), two 는 2점마다 서브 교대·듀스부터 1점마다(탁구).
+  badminton: { name: '배드민턴', format: 'sets', formats: ['sets'], sets: 3, setPoints: 21, cap: 30, deuce: true, serve: 'rally', starters: 1, cards: 0, steps: '1' },
+  tabletennis: { name: '탁구', format: 'sets', formats: ['sets'], sets: 5, setPoints: 11, cap: 0, deuce: true, serve: 'two', starters: 1, cards: 0, steps: '1' },
   volley: { name: '배구', format: 'sets', formats: ['sets'], sets: 3, setPoints: 25, starters: 6, cards: 6, steps: '1' },
   teeball: { name: '티볼', format: 'innings', formats: ['innings'], innings: 3, starters: 10, cards: 3, steps: '1', detail: true, rotate: 'all' },
   baseball: { name: '야구', format: 'innings', formats: ['innings'], innings: 5, starters: 9, cards: 3, steps: '1', detail: true, rotate: 'out3' },
@@ -34,6 +38,12 @@ export function gradeFromSport(sport, label) {
     outDetail: !!p.outDetail,
     // 농구: 파울 기록(개인 pfMax개면 퇴장, 구간마다 팀 파울 tfMax개째부터 자유투), 공격 제한 시간(shotSec초), 8초 룰
     fouls: !!p.fouls, shot: !!p.shot, eight: !!p.eight, pfMax: 5, tfMax: 5, shotSec: 24,
+    // 축구·풋살: 경고·퇴장 기록. 경고 두 번이면 퇴장.
+    yr: !!p.yr,
+    // 배드민턴·탁구: 듀스(2점 차), 상한 점수, 서브 방식
+    deuce: !!p.deuce, cap: p.cap || 0, serve: p.serve || '',
+    // 쉬는 시간(분). 구간이 끝나면 자동으로 센다. 0은 없음. restHalf 는 쿼터제에서 2쿼터 뒤(하프타임), 0이면 rest 와 같게.
+    rest: 0, restHalf: 0,
     // 이닝제 전용: detail 이 켜지면 타석마다 기록한다. rotate 는 공수 교대 방식(all 전원 타격제, out3 3아웃제).
     // maxAdv: 한 번 쳐서 갈 수 있는 최대 루 수(홈런 제외). 2면 3루타 단추가 없어진다.
     // keepRunners: 켜면 한 팀의 공격이 끝날 때 남은 주자를 그 팀의 다음 공격 때 그대로 둔다.
@@ -48,6 +58,46 @@ export const usesPicker = (grade) => isTimed(grade) || grade.format === 'innings
 // 1·2·3점 단추는 농구(와 직접 입력 종목)에서만 쓴다. 그 밖의 종목은 항상 1점씩.
 export const canStep = (grade) => isTimed(grade) && (grade.sport === 'basket' || grade.sport === 'custom');
 export const stepsOf = (grade) => (canStep(grade) && grade.steps === '123' ? [1, 2, 3] : [1]);
+// 축구·풋살 경고·퇴장을 쓰는지
+export const usesCards = (grade) => (grade.sport === 'soccer' || grade.sport === 'futsal') && isTimed(grade) && !!grade.yr;
+// 배드민턴·탁구처럼 서브와 듀스를 따지는 세트제인지
+export const isRacket = (grade) => grade.format === 'sets' && (grade.sport === 'badminton' || grade.sport === 'tabletennis');
+const other = (side) => (side === 'a' ? 'b' : 'a');
+
+// 지금 세트가 끝날 점수인지. 듀스를 쓰면 2점 차가 나야 하고, 상한 점수에 닿으면 1점 차로도 끝난다.
+export function setWon(g, grade) {
+  const a = Number((g.pa || [])[g.cur]) || 0, b = Number((g.pb || [])[g.cur]) || 0, top = Math.max(a, b);
+  const target = Math.max(1, Number(grade.setPoints) || 1), cap = Number(grade.cap) || 0;
+  if (a === b || top < target) return '';
+  if (grade.deuce && Math.abs(a - b) < 2 && !(cap && top >= cap)) return '';
+  return a > b ? 'a' : 'b';
+}
+
+// 지금 서브할 쪽. 첫 서브(g.fs, 기본 a)에서 시작한다.
+export function server(g, grade) {
+  if (!isRacket(grade) || g.status !== 'live') return '';
+  const fs = g.fs === 'b' ? 'b' : 'a';
+  const a = Number((g.pa || [])[g.cur]) || 0, b = Number((g.pb || [])[g.cur]) || 0;
+  if (grade.serve === 'two') {
+    const first = g.cur % 2 ? other(fs) : fs, tp = Math.max(1, Number(grade.setPoints) || 11) - 1;
+    const turns = a >= tp && b >= tp ? tp + (a + b - 2 * tp) : Math.floor((a + b) / 2);
+    return turns % 2 ? other(first) : first;
+  }
+  // 배드민턴: 방금 점수를 딴 쪽이 서브. 세트 첫 서브는 앞 세트를 이긴 쪽.
+  if (g.lp === 'a' || g.lp === 'b') return g.lp;
+  const prev = g.cur > 0 ? (Array.isArray(g.wins) ? g.wins : Object.values(g.wins || {}))[g.cur - 1] : '';
+  return prev === 'a' || prev === 'b' ? prev : fs;
+}
+
+// 쉬는 시간: 구간이 끝나고 다음 구간으로 넘어갈 때 센다.
+export const restLeft = (g, now) => (g.rest ? Math.max(0, g.rest.ms - (now - g.rest.at)) : 0);
+function startRest(g, grade, now) {
+  const base = Math.max(0, Number(grade.rest) || 0), half = Math.max(0, Number(grade.restHalf) || 0);
+  const min = grade.format === 'quarters' && g.cur === 2 && half ? half : base;
+  if (min > 0) g.rest = { at: now, ms: min * 60000 }; else delete g.rest;
+}
+export function endRest(g, grade) { norm(g, grade); delete g.rest; return []; }
+
 // 농구 규칙을 쓰는지. 파울 기록과 공격 제한 시간은 따로 켜고 끈다.
 export const usesFouls = (grade) => grade.sport === 'basket' && isTimed(grade) && !!grade.fouls;
 export const usesShot = (grade) => grade.sport === 'basket' && isTimed(grade) && !!grade.shot;
@@ -92,6 +142,8 @@ export function norm(g, grade) {
   g.r0 = { a: 0, b: 0, ...(g.r0 || {}) };
   g.dout = { a: {}, b: {}, ...(g.dout || {}) };
   g.pf = { a: {}, b: {}, ...(g.pf || {}) };
+  g.yc = { a: {}, b: {}, ...(g.yc || {}) };
+  g.rc = { a: {}, b: {}, ...(g.rc || {}) };
   g.tf = { a: pad((g.tf || {}).a), b: pad((g.tf || {}).b) };
   g.cur = g.cur || 0; g.half = g.half || 0; g.sa = g.sa || 0; g.sb = g.sb || 0;
   if (grade.format === 'innings') {
@@ -189,6 +241,7 @@ export function toggleClock(g, grade, ctx) {
   if (g.clock.run) halt(g, ctx.now);
   else if (g.clock.left > 0) {
     g.clock = { run: true, left: g.clock.left, at: ctx.now };
+    delete g.rest;
     for (const k of ['sc', 'bc']) if (g[k] && g[k].left > 0) g[k] = { run: true, left: g[k].left, at: ctx.now };
   }
   return [];
@@ -258,6 +311,32 @@ export function shotSet(g, grade, ctx, secs) {
 // 공이 하프라인을 넘어옴: 8초 세기를 끝낸다.
 export function crossed(g, grade) { norm(g, grade); delete g.bc; return []; }
 
+// ----- 축구·풋살: 경고와 퇴장 -----
+// color: 'y' 경고, 'r' 퇴장. 경고가 두 번이면 퇴장이 된다. 퇴장당한 선수는 경기장에서 빠지고 다시 들어올 수 없다.
+export function card(g, grade, ctx, team, pid, color) {
+  norm(g, grade); live(g);
+  const who = playerLabel(ctx, team, pid);
+  if (!who) throw new Error('선수를 골라 주세요.');
+  if (g.rc[team][pid]) throw new Error('이미 퇴장당한 선수입니다.');
+  let red = color === 'r', second = false;
+  if (!red) { g.yc[team][pid] = (Number(g.yc[team][pid]) || 0) + 1; if (g.yc[team][pid] >= 2) { red = true; second = true; } }
+  if (red) { g.rc[team][pid] = true; g.lineup[team][pid] = 'red'; }
+  g.buzz = { at: ctx.now, k: 'whistle' };
+  const text = `${ctx.names[team]} ${red ? (second ? '경고 2회 퇴장' : '퇴장') : '경고'} · ${who}`;
+  return [mk(g, grade, ctx, 'card', text, { team, pid, color: red && !second ? 'r' : 'y', red })];
+}
+
+// 잘못 준 카드를 되돌린다. 퇴장이 풀리면 경기장으로 돌아온다.
+export function uncard(g, grade, ctx, l) {
+  norm(g, grade);
+  const { team, pid } = l;
+  if (l.color === 'y' && g.yc[team][pid]) { g.yc[team][pid] -= 1; if (!g.yc[team][pid]) delete g.yc[team][pid]; }
+  if (l.red && g.rc[team][pid]) { delete g.rc[team][pid]; if (g.lineup[team][pid] === 'red') g.lineup[team][pid] = 'on'; }
+  return [];
+}
+export const yellows = (g, side, pid) => Number(((g.yc || {})[side] || {})[pid]) || 0;
+export const sentOff = (g, side, pid) => !!((g.rc || {})[side] || {})[pid];
+
 // 공격 제한 시간이나 8초가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.
 export function shotUp(g, grade, ctx) {
   norm(g, grade);
@@ -308,7 +387,8 @@ export function score(g, grade, ctx, team, pts, pid, apid) {
   const arr = team === 'a' ? g.pa : g.pb;
   arr[g.cur] = Math.max(0, arr[g.cur] + pts);
   recount(g, grade);
-  if (pts > 0) g.last = { team, at: ctx.now, by: ctx.uid || '' };
+  if (pts > 0) { g.last = { team, at: ctx.now, by: ctx.uid || '' }; delete g.rest; if (isRacket(grade)) g.lp = team; }
+  else if (isRacket(grade)) delete g.lp;
   // 농구: 골이 들어가면 공격권이 상대에게 넘어가고 공격 제한 시간을 처음부터 센다.
   if (pts > 0 && usesShot(grade)) setPoss(g, grade, team === 'a' ? 'b' : 'a', ctx.now);
   if (!usesPicker(grade)) return [];
@@ -328,7 +408,7 @@ export function editGoal(l, ctx, pid, apid) {
 }
 
 function finish(g, grade, ctx, logs) {
-  clearShot(g);
+  clearShot(g); delete g.rest;
   if (g.clock) g.clock = { run: false, left: clockLeft(g, ctx.now), at: ctx.now };
   g.status = 'done'; g.endedAt = ctx.now;
   logs.push({ at: ctx.now, tag: '종료', type: 'info', text: `경기 종료 ${g.sa} : ${g.sb}`, by: ctx.uid || '' });
@@ -343,7 +423,7 @@ export function nextPart(g, grade, ctx) {
     const logs = [mk(g, grade, ctx, 'info', `${partName(grade, g.cur)} 종료 ${g.sa} : ${g.sb}`)];
     if (g.cur >= n - 1) return finish(g, grade, ctx, logs);
     g.cur += 1; g.clock = { run: false, left: partMs(grade), at: ctx.now };
-    clearShot(g);
+    clearShot(g); startRest(g, grade, ctx.now);
     return logs;
   }
   if (grade.format === 'innings') {
@@ -358,12 +438,13 @@ export function nextPart(g, grade, ctx) {
   if (grade.format === 'sets') {
     const a = g.pa[g.cur], b = g.pb[g.cur];
     if (a === b) throw new Error('세트 점수가 같습니다. 점수를 확인해 주세요.');
+    if (isRacket(grade) && !setWon(g, grade)) throw new Error(`아직 세트가 끝나지 않았습니다. ${grade.setPoints}점을 먼저 따고${grade.deuce ? ' 2점 차가 나야' : ''} 끝납니다${Number(grade.cap) ? ` (${grade.cap}점에 먼저 닿으면 끝)` : ''}.`);
     const w = a > b ? 'a' : 'b';
     const logs = [mk(g, grade, ctx, 'info', `${g.cur + 1}세트 ${ctx.names[w]} 승 ${a} : ${b}`)];
     g.wins[g.cur] = w; recount(g, grade);
     const need = Math.floor(n / 2) + 1;
     if (g.sa >= need || g.sb >= need || g.cur >= n - 1) return finish(g, grade, ctx, logs);
-    g.cur += 1;
+    g.cur += 1; delete g.lp; startRest(g, grade, ctx.now);
     return logs;
   }
   // 피구: 선생님이 직접 세트를 끝낼 때
@@ -385,6 +466,7 @@ function endDodgeSet(g, grade, ctx, winner, reason) {
   if (g.sa >= need || g.sb >= need || g.cur >= n - 1) return finish(g, grade, ctx, logs);
   g.cur += 1; g.remain = { ...g.r0 };
   g.clock = { run: false, left: partMs(grade), at: ctx.now };
+  startRest(g, grade, ctx.now);
   return logs;
 }
 
@@ -392,6 +474,7 @@ function endDodgeSet(g, grade, ctx, winner, reason) {
 // pid 는 아웃된(또는 되살아난) 선수, kpid 는 아웃시킨 상대 선수. 둘 다 없어도 된다(인원만 세기).
 export function dodgeOut(g, grade, ctx, team, delta, pid, kpid) {
   norm(g, grade); live(g);
+  delete g.rest;
   if (g.tie) throw new Error('동점입니다. 무승부나 연장을 먼저 골라 주세요.');
   const other = team === 'a' ? 'b' : 'a';
   const logs = [];
@@ -577,7 +660,7 @@ export function records(teams, games, logs) {
     const key = `${teamId}/${pid}`;
     const t = teams[teamId] || {}; const p = (t.players || {})[pid];
     if (!p) return null;
-    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, pf: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
+    return (out[key] = out[key] || { key, teamId, team: t.name, no: p.no, name: p.name, games: 0, starts: 0, goals: 0, subIn: 0, as: 0, ko: 0, pf: 0, yc: 0, rc: 0, ab: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, rbi: 0, detail: [] });
   };
   for (const g of games) {
     if (g.status === 'ready') continue;
@@ -608,6 +691,11 @@ export function records(teams, games, logs) {
         const fouls = mine.filter((l) => l.type === 'foul' && l.pid === pid).length;
         r.pf += fouls;
         if (fouls) bits.push(`파울 ${fouls}`);
+        const cards = mine.filter((l) => l.type === 'card' && l.pid === pid);
+        const yc = cards.filter((l) => l.color === 'y').length, rc = cards.filter((l) => l.red).length;
+        r.yc += yc; r.rc += rc;
+        if (yc) bits.push(`경고 ${yc}`);
+        if (rc) bits.push('퇴장');
         if (kills) bits.push(`아웃시킴 ${kills}`);
         r.detail.push(`${g.no}경기 ${other}전 · ${bits.join(', ')}`);
       }

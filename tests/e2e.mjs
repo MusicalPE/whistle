@@ -901,6 +901,109 @@ try {
     assert.equal(await t.locator('[data-act="gFoul"], [data-act="gPoss"]').count(), 0);
   });
 
+  await step('축구: 경고·퇴장과 쉬는 시간, 전광판에서 추첨 닫기', async () => {
+    await t.setViewportSize({ width: 390, height: 844 });
+    await addGrade('축구반', 'soccer');
+    await t.goto(`${base}#rules`);
+    await t.waitForSelector('text=경고 · 퇴장 기록');
+    await t.getByRole('button', { name: '쉬는 시간 늘리기' }).click();
+    await t.waitForSelector('text=1분');
+    for (let i = 0; i < 4; i++) await t.getByRole('button', { name: '선발 인원 줄이기' }).click();
+    await t.goto(`${base}#teams`);
+    await t.waitForSelector('text=+ 팀 추가');
+    await addTeam('축구 가', ['1 가람', '2 나래', '3 다온', '4 라온', '5 마루']);
+    await addTeam('축구 나', ['1 사랑', '2 아름', '3 자람', '4 차오', '5 큰솔']);
+    await t.goto(`${base}#games`);
+    await t.getByRole('button', { name: '+ 경기 추가' }).click(); await sbtn(t, '추가').click();
+    await t.locator('a.game:not(.other)').last().click();
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('[data-act="gCard"]');
+    // 경고 → 같은 선수 두 번째 경고는 퇴장
+    const give = async (team, idx, name) => { await t.locator(`[data-act="gCard"][data-team="${team}"]`).click(); await t.waitForSelector('text=어느 선수인가요?'); await t.locator('#sheet .pl').nth(idx).click(); await sbtn(t, name).click(); };
+    await give('a', 1, '경고');
+    await t.waitForSelector('text=축구 가 경고 · 2 나래');
+    assert.match(await text(t), /경고 1 · 퇴장 0/);
+    await t.locator('[data-act="gCard"][data-team="a"]').click();
+    await t.locator('#sheet .pl').nth(1).click();
+    await t.waitForSelector('text=경고 1회 있음');
+    await sbtn(t, '경고 (두 번째 · 퇴장됩니다)').click();
+    await t.waitForSelector('text=축구 가 경고 2회 퇴장 · 2 나래');
+    assert.match(await text(t), /경고 2 · 퇴장 1/);
+    await give('b', 0, '퇴장');
+    await t.waitForSelector('text=축구 나 퇴장 · 1 사랑');
+    // 퇴장 선수는 득점 선수 목록과 교체 화면에서 빠진다
+    await t.locator('[data-act="gPlus"][data-team="a"]').click();
+    await t.waitForSelector('text=누가 넣었나요?');
+    assert.ok(!(await t.locator('#sheet').innerText()).includes('나래'));
+    await sbtn(t, '취소').click();
+    // 학생 화면: 퇴장 표시
+    await s.goto(`${base}?v=${tid}`);
+    await s.waitForSelector('text=학생용 · 보기 전용');
+    await s.selectOption('select[data-change="pickGrade"]', { label: '축구반' });
+    await s.waitForSelector('.rcard');
+    assert.match(await text(s), /2 나래[\s\S]*퇴장/);
+    await shot(t, '47-cards'); await shot(s, '48-cards-student');
+    // 카드 취소: 선수가 경기장으로 돌아온다
+    await t.locator('button.log.edit[data-act="cardUndo"]').first().click();
+    await t.waitForFunction(() => /경고 0 · 퇴장 0/.test(document.body.innerText));
+    // 전반이 끝나면 쉬는 시간이 자동으로 센다. 시계를 시작하면 끝난다.
+    await btn(t, '전반 끝내기').click();
+    await t.waitForSelector('[data-rest]');
+    assert.match(await t.locator('[data-rest]').innerText(), /^0[01]:\d\d$/);
+    await b.goto(`${base}?b=${tid}`);
+    await b.waitForSelector('.board [data-rest]');
+    await shot(t, '49-rest');
+    await btn(t, '시계 시작').click();
+    await t.waitForFunction(() => !document.querySelector('[data-rest]'));
+    // 전광판에서 추첨 닫기: 진행 중인 경기 화면으로 넘어간다
+    await t.goto(`${base}#home`);
+    await t.locator('[data-act="pickGrade"]', { hasText: '편성반' }).click();
+    await t.goto(`${base}#plan`);
+    await btn(t, '전광판에 추첨 띄우기').click();
+    await b.waitForSelector('.drawbox');
+    await b.locator('[data-act="drawClose"]').click();
+    await b.waitForFunction(() => !document.querySelector('.drawbox') && document.querySelector('.board .pts'));
+    await t.waitForSelector('text=전광판에 추첨 띄우기');
+  });
+
+  await step('배드민턴·탁구: 단식·복식, 서브 표시, 듀스와 세트 끝', async () => {
+    await addGrade('탁구반', 'tabletennis');
+    await t.goto(`${base}#rules`);
+    await t.waitForSelector('text=경기 인원');
+    assert.match(await text(t), /단식[\s\S]*복식[\s\S]*듀스[\s\S]*상한 점수/);
+    await btn(t, '복식').click();
+    await t.waitForFunction(() => document.querySelector('[data-act="setStarters"].on').textContent === '복식');
+    for (let i = 0; i < 8; i++) await t.getByRole('button', { name: '세트 점수 줄이기' }).click();
+    await t.waitForSelector('text=5점');
+    await t.goto(`${base}#teams`);
+    await t.waitForSelector('text=+ 팀 추가');
+    await addTeam('가람·나래', ['1 가람', '2 나래']);
+    await addTeam('다온·라온', ['1 다온', '2 라온']);
+    await t.goto(`${base}#games`);
+    await t.getByRole('button', { name: '+ 경기 추가' }).click(); await sbtn(t, '추가').click();
+    await t.locator('a.game:not(.other)').last().click();
+    await btn(t, '경기 시작').click();
+    await t.waitForSelector('text=서브 · 가람·나래');
+    await btn(t, '첫 서브 바꾸기').click();
+    await t.waitForSelector('text=서브 · 다온·라온');
+    await btn(t, '첫 서브 바꾸기').click();
+    await t.waitForSelector('text=서브 · 가람·나래');
+    const pt = async (team) => { const before = await t.locator(`[data-score="${team}"]`).innerText(); await t.locator(`[data-act="gPlus"][data-team="${team}"]`).click(); await t.waitForFunction(([tm, v]) => document.querySelector(`[data-score="${tm}"]`).textContent !== v, [team, before]); };
+    await pt('a'); await pt('a');
+    await t.waitForSelector('text=서브 · 다온·라온');     // 2점마다 서브 교대
+    await pt('b'); await pt('b'); await pt('a'); await pt('a'); await pt('b'); await pt('b');   // 4:4 = 듀스(5점 세트)
+    await t.waitForSelector('text=듀스입니다. 2점 차가 나야 세트가 끝납니다.');
+    await pt('a');                                        // 5:4 아직 끝 아님
+    await btn(t, '1세트 끝내기').click();
+    await t.waitForFunction(() => /아직 세트가 끝나지 않았습니다/.test(document.getElementById('toast').textContent));
+    await pt('a');                                        // 6:4
+    await t.waitForSelector('text=1세트 승리 점수입니다');
+    await shot(t, '50-racket');
+    await btn(t, '1세트 끝내기').click();
+    await t.waitForFunction(() => /1 : 0/.test(document.querySelector('.dark').innerText));
+    await t.waitForSelector('text=서브 · 다온·라온');     // 다음 세트는 첫 서브가 바뀐다
+  });
+
   await step('사용 안내: 대회 안과 대회 목록에서 간략 사용법 열기', async () => {
     await t.setViewportSize({ width: 390, height: 844 });
     await t.goto(`${base}#home`);

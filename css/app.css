@@ -293,3 +293,8 @@ button.log.edit:hover span { text-decoration: underline; }
 .board .setbadge.hot { background: #B42318; border-color: #B42318; }
 .board .shotc { display: flex; align-items: baseline; justify-content: center; gap: 1.2vw; margin-top: 1vh; color: #FDBA8C; font-weight: 700; font-size: clamp(14px, 1.8vw, 26px); }
 .board .shotc .num { font-size: clamp(34px, 6vw, 90px); line-height: 1; }
+
+/* 축구 경고·퇴장 표시 */
+.ycard, .rcard { display: inline-block; width: 9px; height: 13px; border-radius: 2px; vertical-align: -1px; }
+.ycard { background: #FACC15; border: 1px solid #CA8A04; }
+.rcard { background: #DC2626; border: 1px solid #991B1B; }

@@ -127,6 +127,8 @@ const demoBar = () => (S.store.demo ? `<div class="demo">${TRY ? '미리보기 �
 // 선생님 경기 화면의 기록 줄: 득점 기록은 눌러서 넣은 선수·어시스트를 나중에 고칠 수 있다.
 const teacherLogRow = (gameId) => (l) => (l.type === 'goal' && !l.x
   ? `<button class="log edit" data-act="editGoal" data-id="${gameId}" data-log="${l.id}" aria-label="득점 기록 고치기"><b>${esc(l.tag)}</b><span>${esc(l.text)}</span><i>${l.pid ? '고치기' : '선수 넣기'}</i></button>`
+  : l.type === 'card' && !l.x
+    ? `<button class="log edit" data-act="cardUndo" data-id="${gameId}" data-log="${l.id}" aria-label="경고·퇴장 기록 취소"><b>${esc(l.tag)}</b><span>${esc(l.text)}</span><i>취소</i></button>`
   : l.type === 'foul' && !l.x
     ? `<button class="log edit" data-act="foulUndo" data-id="${gameId}" data-log="${l.id}" aria-label="파울 기록 취소"><b>${esc(l.tag)}</b><span>${esc(l.text)}</span><i>취소</i></button>`
     : logRow(l));
@@ -143,6 +145,7 @@ const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
   ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄우면 공 뽑기로 한 팀씩 뽑히는 모습을 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
+  ['종목별 규칙', ['축구·풋살: "경고 · 퇴장"을 누르고 선수를 고릅니다. 경고 두 번이면 퇴장이고, 퇴장당한 선수는 경기장에서 빠집니다.', '배드민턴·탁구: 단식이나 복식으로 팀을 만듭니다(팀 하나에 선수 한두 명). 서브할 쪽이 표시되고, 듀스면 2점 차가 나야 세트를 끝낼 수 있습니다.', '쉬는 시간: "종목·규칙"에서 분을 정해 두면 전반이나 쿼터, 세트가 끝날 때 자동으로 셉니다. 시계를 시작하면 끝납니다.']],
   ['농구 규칙 (농구만)', ['홈의 "종목·규칙"에서 파울 기록, 공격 제한 시간(24초), 8초 룰을 켜고 끕니다.', '"파울 (휘슬)"을 누르면 휘슬이 울리고 시계가 멈춥니다. 이어서 파울한 선수를 고르면 개인 파울과 팀 파울이 올라갑니다.', '개인 파울이 5개가 되면 퇴장 안내가 뜨고, 팀 파울이 5개째부터는 "자유투"가 표시됩니다.', '공격 팀을 누르면 24초와 8초를 세기 시작합니다. 공이 하프라인을 넘으면 "넘어옴"을 누릅니다. 시간이 다 되면 버저가 울리고 시계가 멈춥니다.', '전광판에서 소리를 들으려면 전광판 화면의 "소리 켜기"를 한 번 눌러 주세요.']],
   ['학생 화면과 전광판', ['"경기" 탭의 학생용 QR을 크게 띄워 보여 줍니다. 학생은 로그인 없이 보기만 합니다.', '학생 화면은 몇 초마다 새로 읽어서 5초쯤 늦게 바뀝니다.', '"전광판 모드"를 TV나 전자칠판에 띄우면 큰 점수판이 됩니다.', 'QR과 주소는 우리 학교 학생과 학부모에게만 공유해 주세요.']],
   ['함께 심판 보기', ['홈 오른쪽 위 "함께하는 선생님 · 초대"에서 초대 QR이나 코드를 보냅니다.', '선생님마다 경기 진행만, 팀 명단과 일정까지, 모든 설정까지 가운데 권한을 정합니다.']],
@@ -191,7 +194,7 @@ function mainScore(g, gr) {
   const done = g.status === 'done';
   if (L.isTimed(gr)) return { a: g.sa, b: g.sb, mid: done ? '종료' : clockSpan(g, 'clk'), sub: done ? '' : `${L.partName(gr, g.cur)} · 남은 시간`, clock: !done };
   if (gr.format === 'innings') return { a: g.sa, b: g.sb, mid: done ? '종료' : L.partName(gr, g.cur, g.half), sub: done ? '' : `${esc(teamName(g.half ? g.b : g.a))} 공격${L.isDetail(g, gr) ? ` · ${g.halfDone ? '공격 끝' : `타자 ${esc(batterText(g))}`} · 아웃 ${g.outs}` : ''}` };
-  if (gr.format === 'sets') return done ? { a: g.sa, b: g.sb, mid: '종료', sub: '세트 스코어' } : { a: g.pa[g.cur], b: g.pb[g.cur], mid: `${g.sa} : ${g.sb}`, sub: `세트 스코어 · ${g.cur + 1}세트` };
+  if (gr.format === 'sets') return done ? { a: g.sa, b: g.sb, mid: '종료', sub: '세트 스코어' } : { a: g.pa[g.cur], b: g.pb[g.cur], mid: `${g.sa} : ${g.sb}`, sub: `세트 스코어 · ${g.cur + 1}세트${L.server(g, gr) ? ` · 서브 ${esc(teamName(g[L.server(g, gr)]))}` : ''}` };
   return done ? { a: g.sa, b: g.sb, mid: '종료', sub: '세트 스코어' } : { a: g.remain.a, b: g.remain.b, mid: clockSpan(g, 'clk'), sub: `${g.cur + 1}세트 · 남은 인원 · 세트 ${g.sa} : ${g.sb}${g.ext ? ' · 연장' : ''}`, clock: true };
 }
 
@@ -432,6 +435,20 @@ function hoopBox(g, gr) {
   return `<section class="stack" style="margin:10px 20px 0;gap:10px">${shotRow}${fouls ? `<div class="grid2">${foulCol('a')}${foulCol('b')}</div>` : ''}</section>`;
 }
 
+// 축구·풋살: 경고·퇴장 단추
+function cardBox(g, gr) {
+  if (!L.usesCards(gr)) return '';
+  const col = (side) => { const y = Object.values(g.yc[side]).reduce((s, n) => s + Number(n), 0), r = Object.keys(g.rc[side]).length; return `<div class="card p stack" style="gap:6px"><div class="row between"><span class="label">${esc(teamName(g[side]))}</span><b class="small">경고 ${y} · 퇴장 ${r}</b></div><button class="btn sm" data-act="gCard" data-id="${g.id}" data-team="${side}">경고 · 퇴장</button></div>`; };
+  return `<section class="grid2" style="margin:10px 20px 0">${col('a')}${col('b')}</section>`;
+}
+
+// 쉬는 시간: 구간이 끝나면 자동으로 세고, 시계를 시작하거나 점수가 나면 끝난다.
+const restSpan = (g) => `<span class="num" data-rest="${g.id}">${L.fmtClock(L.restLeft(g, S.store.now()))}</span>`;
+function restBox(g) {
+  if (!g.rest || g.status !== 'live') return '';
+  return `<section class="pad" style="margin-top:10px"><div class="card p row between" style="border-color:var(--ink)"><span class="stack" style="gap:0"><span class="label">쉬는 시간</span><b style="font-size:30px;line-height:1.1">${restSpan(g)}</b></span><button class="btn sm" style="flex:0 0 auto" data-act="gRestEnd" data-id="${g.id}">쉬는 시간 끝내기</button></div></section>`;
+}
+
 // 다른 기기에서 난 휘슬·버저를 이 기기에서도 울린다(전광판, 같은 경기를 보고 있는 선생님).
 function hearBuzz() {
   if (MODE !== 'teacher' && MODE !== 'board') return;
@@ -502,7 +519,11 @@ function gameScreen(id) {
   } else if (gr.format === 'sets') {
     topBox = `<div class="stack center" style="gap:2px"><span class="label">세트 스코어</span><span class="num" style="font-size:44px">${g.sa} : ${g.sb}</span><span class="note">${gr.sets}세트 중 ${Math.floor(gr.sets / 2) + 1}세트 먼저 · 세트마다 ${gr.setPoints}점</span></div>`;
     a = liveNow ? g.pa[g.cur] : g.sa; b = liveNow ? g.pb[g.cur] : g.sb;
-    if (liveNow && Math.max(a, b) >= Number(gr.setPoints)) hint = `${gr.setPoints}점이 됐습니다. 세트를 끝내려면 아래 "${g.cur + 1}세트 끝내기"를 누르세요.`;
+    const won = liveNow ? L.setWon(g, gr) : '', srv = L.server(g, gr);
+    if (L.isRacket(gr)) {
+      topBox = `<div class="stack center" style="gap:2px"><span class="label">세트 스코어</span><span class="num" style="font-size:44px">${g.sa} : ${g.sb}</span><span class="note">${gr.sets}세트 중 ${Math.floor(gr.sets / 2) + 1}세트 먼저 · 세트마다 ${gr.setPoints}점${gr.deuce ? ' · 2점 차' : ''}${Number(gr.cap) ? ` · ${gr.cap}점까지` : ''}</span>${srv ? `<span class="row" style="justify-content:center;gap:8px;margin-top:4px"><b class="t${srv}" style="font-size:16px">서브 · ${esc(teamName(g[srv]))}</b>${g.cur === 0 && a + b === 0 ? `<button class="btn sm white" style="height:30px;padding:0 10px" data-act="gServe" data-id="${g.id}">첫 서브 바꾸기</button>` : ''}</span>` : ''}</div>`;
+      hint = won ? `${esc(teamName(g[won]))} ${g.cur + 1}세트 승리 점수입니다. 아래 "${g.cur + 1}세트 끝내기"를 눌러 주세요.` : liveNow && gr.deuce && a === b && a >= Number(gr.setPoints) - 1 ? '듀스입니다. 2점 차가 나야 세트가 끝납니다.' : '';
+    } else if (liveNow && Math.max(a, b) >= Number(gr.setPoints)) hint = `${gr.setPoints}점이 됐습니다. 세트를 끝내려면 아래 "${g.cur + 1}세트 끝내기"를 누르세요.`;
   } else {
     topBox = `<div class="grid2 center"><div class="stack" style="gap:2px"><span class="label">세트 스코어</span><span class="num" style="font-size:44px">${g.sa} : ${g.sb}</span><span class="note">${gr.sets}세트 중 ${Math.floor(gr.sets / 2) + 1}세트 먼저</span></div><div class="stack" style="gap:2px"><span class="label">${g.ext ? '연장' : '세트 남은 시간'}</span><span style="font-size:44px;line-height:1">${clockSpan(g, '')}</span><span class="note">한 세트 ${gr.minutes}분</span></div></div>`;
     a = liveNow ? g.remain.a : g.sa; b = liveNow ? g.remain.b : g.sb;
@@ -514,7 +535,7 @@ function gameScreen(id) {
 <div><span class="name ta">${esc(teamName(g.a))}${role('a')}</span><span class="num big" data-score="a">${a}</span>${btns('a')}</div>
 <div><span class="name tb">${esc(teamName(g.b))}${role('b')}</span><span class="num big" data-score="b">${b}</span>${btns('b')}</div></div>${hint ? `<span class="note center">${hint}</span>` : ''}</section>`;
   const table = partsTable(g, gr);
-  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tieBox}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}${liveNow ? hoopBox(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
+  return `<div class="app">${demoBar()}${head}<div class="cols"><div class="col">${board}${tieBox}${tie}${liveNow && L.isDetail(g, gr) ? batBox(g, gr) : ''}${liveNow ? restBox(g) : ''}${liveNow && !g.tie ? controls(g, gr) : ''}${liveNow ? hoopBox(g, gr) : ''}${liveNow ? cardBox(g, gr) : ''}</div><div class="col">${liveNow ? cardsRow(g, gr) : ''}${table ? `<section style="margin:10px 20px 0">${table}</section>` : ''}${logBox}${canTeams() ? `<div class="center mt"><button class="btn plain" data-act="delGame" data-id="${id}">이 경기 지우기</button></div>` : ''}</div></div><div style="height:16px"></div>${nav('games')}</div>`;
 }
 
 function subScreen(id, side) {
@@ -576,7 +597,12 @@ ${f === 'innings' ? `<div class="set"><span>이닝 수</span>${stepper('innings'
 ${gr.detail ? `<div class="set"><span>공수 교대</span>${seg('rotate', gr.rotate || 'all', [['all', '전원 타격제'], ['out3', '3아웃제']])}</div>
 <div class="set"><span>최대 진루 <span class="muted">(홈런 제외)</span></span>${stepper('maxAdv', L.maxAdv(gr), '루', 1, 3, '최대 진루')}</div>
 <div class="set"><span>지난 공격에서 남은 주자</span>${seg('keepRunners', gr.keepRunners ? 1 : 0, [[1, '다음 공격에 유지'], [0, '비우기']])}</div>` : ''}` : ''}
-<div class="set"><span>선발 인원</span>${stepper('starters', gr.starters, '명', 1, 30, '선발 인원')}</div>
+${L.isRacket(gr) ? `<div class="set"><span>경기 인원</span><div class="seg" style="margin-right:6px">${[[1, '단식'], [2, '복식']].map(([v, t]) => `<button class="${Number(gr.starters) === v ? 'on' : ''}" data-act="setStarters" data-val="${v}">${t}</button>`).join('')}</div></div>
+<div class="set"><span>듀스 <span class="muted">(2점 차로 이겨야 끝)</span></span>${seg('deuce', gr.deuce ? 1 : 0, [[1, '사용'], [0, '안 함']])}</div>
+<div class="set"><span>상한 점수 <span class="muted">(먼저 닿으면 끝 · 0은 없음)</span></span>${stepper('cap', Number(gr.cap) || 0, '점', 0, 60, '상한 점수')}</div>` : `<div class="set"><span>선발 인원</span>${stepper('starters', gr.starters, '명', 1, 30, '선발 인원')}</div>`}
+${f !== 'innings' && f !== 'single' ? `<div class="set"><span>쉬는 시간 <span class="muted">(구간 사이 자동 · 0은 없음)</span></span>${stepper('rest', Number(gr.rest) || 0, '분', 0, 20, '쉬는 시간')}</div>` : ''}
+${f === 'quarters' ? `<div class="set"><span>하프타임 <span class="muted">(2쿼터 뒤 · 0은 쉬는 시간과 같게)</span></span>${stepper('restHalf', Number(gr.restHalf) || 0, '분', 0, 30, '하프타임')}</div>` : ''}
+${L.isTimed(gr) && (gr.sport === 'soccer' || gr.sport === 'futsal') ? `<div class="set"><span>경고 · 퇴장 기록</span>${seg('yr', gr.yr ? 1 : 0, [[1, '기록'], [0, '안 함']])}</div>` : ''}
 <div class="set"><span>후보 인원 <span class="muted">(팀마다 · 0은 제한 없음)</span></span>${stepper('subs', Number(gr.subs) || 0, '명', 0, 30, '후보 인원')}</div>
 <div class="set"><span>교체 카드 <span class="muted">(팀마다 · 0은 제한 없음)</span></span>${stepper('cards', gr.cards, '장', 0, 20, '교체 카드')}</div>
 <div class="set"><span>나간 선수 다시 들어가기</span>${seg('reentry', gr.reentry ? 1 : 0, [[1, '허용'], [0, '금지']])}</div>
@@ -677,9 +703,11 @@ function lineupCard(g, side, gr) {
   const byOrder = started && gr.format === 'innings' && g.order[side].length;
   const P = Object.fromEntries(playersOf(g[side]).map((p) => [p.pid, p])), now = nowBatter(g, gr, side);
   const outNow = (p) => gr.format === 'dodge' && g.status === 'live' && (g.dout[side] || {})[p.pid];
-  const row2 = (p) => (outNow(p) ? `<span class="muted" style="text-decoration:line-through"><b>${esc(p.no)}</b> ${esc(p.name)}</span>` : row(p));
+  const yc = (p) => (L.usesCards(gr) && L.yellows(g, side, p.pid) ? ' <span class="ycard" title="경고"></span>' : '');
+  const red = started && L.usesCards(gr) ? lineupOf(g, side, 'red') : [];
+  const row2 = (p) => (yc(p) ? `<span><b>${esc(p.no)}</b> ${esc(p.name)}${yc(p)}</span>` : outNow(p) ? `<span class="muted" style="text-decoration:line-through"><b>${esc(p.no)}</b> ${esc(p.name)}</span>` : row(p));
   return `<div class="card lineup ${side}"><b class="t${side}">${esc(teamName(g[side]))}</b><span class="label">${byOrder ? '타순' : started ? '뛰는 중' : '선발'}</span>${byOrder ? g.order[side].filter((pid) => P[pid]).map((pid, i) => `<span${pid === now ? ' class="nowbat"' : ''}><b>${i + 1}번</b> ${esc(P[pid].name)}${pid === now ? ' · 타석' : ''}</span>`).join('') : on.map((p) => row2(p)).join('') || '<span class="muted">-</span>'}
-<span class="label" style="border-top:1px solid var(--soft);padding-top:6px;margin-top:4px">교체 선수</span>${bench.map((p) => row(p, 'muted')).join('')}${out.map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)} <span class="small">나감</span></span>`).join('')}${bench.length + out.length ? '' : '<span class="muted">-</span>'}
+<span class="label" style="border-top:1px solid var(--soft);padding-top:6px;margin-top:4px">교체 선수</span>${bench.map((p) => row(p, 'muted')).join('')}${out.map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)} <span class="small">나감</span></span>`).join('')}${red.map((p) => `<span class="muted"><b>${esc(p.no)}</b> ${esc(p.name)} <span class="rcard" title="퇴장"></span> <span class="small">퇴장</span></span>`).join('')}${bench.length + out.length + red.length ? '' : '<span class="muted">-</span>'}
 ${started && cards ? `<b class="small" style="padding-top:4px">교체 카드 ${L.cardsLeft(g, gr, side)}장 남음</b>` : ''}</div>`;
 }
 
@@ -688,7 +716,7 @@ function liveBlock(g, gr, withLogs = true) {
   const logs = withLogs ? logsOf(g.id).filter((l) => !l.x).slice(0, 6) : [];
   return `<section class="dark stack" style="gap:10px"><div class="row between small bold"><span class="muted">${g.no}경기${g.status === 'live' ? ` · ${L.partName(gr, g.cur, g.half)}` : g.status === 'ready' && L.whenText(g) ? ` · ${esc(L.whenText(g))}` : ''}</span><span class="row" style="gap:6px">${g.status === 'live' ? '<span class="dot"></span>실시간' : statusText(g)}</span></div>
 <div class="row between"><b class="grow ta" style="font-size:16px">${esc(teamName(g.a))}</b><span class="num" style="font-size:64px">${g.status === 'ready' ? 'vs' : `${m.a} : ${m.b}`}</span><b class="grow tb right" style="font-size:16px">${esc(teamName(g.b))}</b></div>
-${g.status === 'ready' ? '' : `<div class="row" style="justify-content:center;align-items:baseline;gap:8px"><span class="note">${m.sub}</span><span class="num" style="font-size:28px">${m.mid}</span></div>`}${g.status === 'live' && (gr.format === 'dodge' || gr.format === 'sets') ? `<div class="row" style="justify-content:center;gap:10px"><span class="tagbox" style="background:#fff;color:var(--ink);font-size:14px;padding:4px 10px">세트 스코어 ${g.sa} : ${g.sb}</span><span class="note">${gr.sets}세트 중 ${Math.floor(gr.sets / 2) + 1}세트 먼저</span></div>` : ''}</section>
+${g.status === 'ready' ? '' : `<div class="row" style="justify-content:center;align-items:baseline;gap:8px"><span class="note">${m.sub}</span><span class="num" style="font-size:28px">${m.mid}</span></div>${g.status === 'live' && g.rest ? `<div class="row" style="justify-content:center;gap:8px"><span class="note">쉬는 시간</span><b>${restSpan(g)}</b></div>` : ''}`}${g.status === 'live' && (gr.format === 'dodge' || gr.format === 'sets') ? `<div class="row" style="justify-content:center;gap:10px"><span class="tagbox" style="background:#fff;color:var(--ink);font-size:14px;padding:4px 10px">세트 스코어 ${g.sa} : ${g.sb}</span><span class="note">${gr.sets}세트 중 ${Math.floor(gr.sets / 2) + 1}세트 먼저</span></div>` : ''}</section>
 ${g.status === 'live' && L.isDetail(g, gr) ? `<section class="card p row" style="gap:14px">${diamond(g, 120)}<div class="stack grow" style="gap:4px"><span class="label">${esc(teamName(g[L.attacker(g)]))} 공격 · 지금 타자</span><b style="font-size:18px">${g.halfDone ? '공격 끝' : esc(batterText(g))}</b><span class="note">${outsText(g, gr)}</span></div></section>` : ''}
 ${g.status !== 'ready' ? partsTable(g, gr) : ''}
 <div class="grid2">${lineupCard(g, 'a', gr)}${lineupCard(g, 'b', gr)}</div>${logs.length ? `<section class="stack" style="gap:4px"><h2 class="h2">경기 기록</h2>${logs.map(logRow).join('')}</section>` : ''}`;
@@ -746,9 +774,9 @@ function boardScreen() {
   const hd = (sub) => `<div class="hd"><div><h1>${esc(T().meta.name)}</h1><p>휘슬! · ${sub}</p></div><div class="row" style="gap:16px">${!Sound.ready() && gradeList().some((x) => L.usesFouls(x) || L.usesShot(x)) ? '<button class="pick" data-act="soundOn">소리 켜기</button>' : ''}<a class="pick row" href="${HOME}" style="text-decoration:none">선생님 화면</a><div class="qr">${qrSvg(`${BASE}?v=${S.tid}${DQ}`)}</div></div></div>`;
   const d = T().display;
   const dgr = d && d.mode === 'draw' && (T().grades || {})[d.gid] ? { ...T().grades[d.gid], id: d.gid } : null;
-  if (dgr && drawOrder(dgr)) {
-    const gr = dgr, order = drawOrder(gr), info = P.planInfo(gr.plan, order.length);
-    return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · 추첨`)}${drawStage(gr, order, d.at || 1)}</div>`;
+  if (dgr && drawOrder(dgr) && S.hideDraw !== d.at) {
+    const gr = dgr, order = drawOrder(gr);
+    return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · 추첨`)}${drawStage(gr, order, d.at || 1)}<div class="center"><button class="pick" style="padding:0 22px" data-act="drawClose">추첨 닫고 경기 화면으로</button></div></div>`;
   }
   if (d && d.mode === 'records' && (T().grades || {})[d.gid]) {
     S.gid = d.gid;
@@ -768,7 +796,7 @@ function boardScreen() {
   const logs = logsOf(g.id).filter((l) => !l.x).slice(0, 3);
   const setBadge = (side) => (g.status === 'live' && (gr.format === 'dodge' || gr.format === 'sets') ? `<div class="setbadge">세트 ${side === 'a' ? g.sa : g.sb}</div>` : g.status === 'live' && L.usesFouls(gr) ? `<div class="setbadge${g.tf[side][g.cur] >= L.tfMax(gr) ? ' hot' : ''}">팀 파울 ${g.tf[side][g.cur]}</div>` : '');
   return `<div class="board">${hd(`${esc(gr.label)} ${esc(L.sportName(gr))} · ${g.no}경기${g.status === 'live' ? ` ${L.partName(gr, g.cur, g.half)}` : ` ${statusText(g)}`}${g.status === 'ready' && L.whenText(g) ? ` · ${esc(L.whenText(g))}` : ''}`)}
-<div class="mid"><div><div class="name ta">${esc(teamName(g.a))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.a}</div>${setBadge('a')}</div><div><div class="sub">${m.sub || ''}</div><div class="num clk">${g.status === 'ready' ? 'vs' : m.mid}</div>${g.status === 'live' && L.usesShot(gr) && g.sc ? `<div class="shotc"><span class="num" data-sc="${g.id}">${Math.ceil(L.tLeft(g.sc, S.store.now()) / 1000)}</span>${g.poss ? `<span>${esc(teamName(g[g.poss]))} 공격</span>` : ''}</div>` : ''}${g.status === 'live' && L.isDetail(g, gr) ? diamond(g, 170, true) : ''}${live.length > 1 ? `<button class="pick" data-act="boardNext">다른 경기 보기 (${live.length})</button>` : ''}</div><div><div class="name tb">${esc(teamName(g.b))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.b}</div>${setBadge('b')}</div></div>
+<div class="mid"><div><div class="name ta">${esc(teamName(g.a))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.a}</div>${setBadge('a')}</div><div><div class="sub">${g.status === 'live' && g.rest ? `쉬는 시간 ${restSpan(g)}` : m.sub || ''}</div><div class="num clk">${g.status === 'ready' ? 'vs' : m.mid}</div>${g.status === 'live' && L.usesShot(gr) && g.sc ? `<div class="shotc"><span class="num" data-sc="${g.id}">${Math.ceil(L.tLeft(g.sc, S.store.now()) / 1000)}</span>${g.poss ? `<span>${esc(teamName(g[g.poss]))} 공격</span>` : ''}</div>` : ''}${g.status === 'live' && L.isDetail(g, gr) ? diamond(g, 170, true) : ''}${live.length > 1 ? `<button class="pick" data-act="boardNext">다른 경기 보기 (${live.length})</button>` : ''}</div><div><div class="name tb">${esc(teamName(g.b))}</div><div class="num pts">${g.status === 'ready' ? '-' : m.b}</div>${setBadge('b')}</div></div>
 <div class="low">${box('a')}<div class="box"><div class="label">경기 기록</div>${logs.map((l) => `<div><b>${esc(l.tag)}</b> ${esc(l.text)}</div>`).join('') || '<div class="label">-</div>'}</div>${box('b')}</div></div>`;
 }
 
@@ -819,6 +847,15 @@ function sheetHtml() {
   if (s.type === 'drawtest') {
     const gr = grade(), order = gr && drawOrder(gr); if (!order) return '';
     return `<div class="board drawtest" role="dialog" aria-label="추첨 연출 미리 보기"><div class="hd"><div><h1>추첨 연출 미리 보기</h1><p>이 화면에서만 보입니다. 전광판에는 띄우지 않습니다.</p></div><div class="row" style="gap:10px"><button class="pick" data-act="drawTestAgain">처음부터</button><button class="pick" data-act="closeSheet">닫기</button></div></div>${drawStage(gr, order, s.at)}</div>`;
+  }
+  if (s.type === 'card') {
+    const g = gameOf(s.id); if (!g) return '';
+    const pl = (p) => `<button class="pl" style="height:56px;border-color:var(--ink);font-weight:700" data-act="cardPick" data-pid="${p.pid}"><b>${esc(p.no)}</b>${esc(p.name)}${L.yellows(g, s.team, p.pid) ? ' <span class="ycard"></span>' : ''}</button>`;
+    if (!s.pid) return `<div class="sheet" role="dialog" aria-label="경고·퇴장 선수 고르기"><div><div class="label">${esc(teamName(g[s.team]))} 경고 · 퇴장</div><h2>어느 선수인가요?</h2></div><div class="grid2" style="gap:8px">${lineupOf(g, s.team, 'on').map(pl).join('')}</div>${close}</div>`;
+    const p = playersOf(g[s.team]).find((x) => x.pid === s.pid), had = L.yellows(g, s.team, s.pid);
+    return `<div class="sheet" role="dialog" aria-label="경고 또는 퇴장"><div><div class="label">${esc(teamName(g[s.team]))} · ${p ? `${esc(p.no)} ${esc(p.name)}` : ''}${had ? ' · 경고 1회 있음' : ''}</div><h2>경고인가요, 퇴장인가요?</h2></div>
+<button class="btn big" style="background:#FACC15;border-color:#CA8A04;color:#111827" data-act="cardColor" data-color="y">경고${had ? ' (두 번째 · 퇴장됩니다)' : ''}</button><button class="btn big" style="background:#DC2626;border-color:#991B1B;color:#fff" data-act="cardColor" data-color="r">퇴장</button>
+<span class="small muted">퇴장당한 선수는 경기장에서 빠지고 이 경기에 다시 들어올 수 없습니다. 그 자리는 교체로 채울 수 없습니다.</span>${close}</div>`;
   }
   if (s.type === 'foul') {
     const g = gameOf(s.id); if (!g) return '';
@@ -1008,7 +1045,7 @@ const actions = {
     await S.store.update(`t/${S.tid}`, up); S.gid = null;
     undoBar(`${gr.label}을(를) 지웠습니다.`, async () => { await S.store.update(`t/${S.tid}`, keep); S.gid = gid; render(true); toast(`${gr.label}을(를) 되돌렸습니다.`); });
   },
-  async setGrade(d) { const v = ['reentry', 'detail', 'keepRunners', 'assist', 'outDetail', 'fouls', 'shot', 'eight'].includes(d.key) ? d.val === '1' : d.val; await S.store.update(gradePath(), { [d.key]: v }); },
+  async setGrade(d) { const v = ['reentry', 'detail', 'keepRunners', 'assist', 'outDetail', 'fouls', 'shot', 'eight', 'yr', 'deuce'].includes(d.key) ? d.val === '1' : d.val; await S.store.update(gradePath(), { [d.key]: v }); },
   async step(d) {
     const cur = Number(grade()[d.key]) || 0;
     const next = Math.min(Number(d.max), Math.max(Number(d.min), cur + Number(d.d)));
@@ -1126,6 +1163,22 @@ const actions = {
     await S.store.tx(`t/${S.tid}/games/${d.id}`, (g) => { L.unfoul(g, T().grades[g.gid], {}, l.team, l.pid, l.part); return JSON.parse(JSON.stringify(g)); });
     toast('파울 기록을 취소했습니다.');
   },
+  gCard(d) { Sound.unlock(); Sound.whistle(); S.mute = S.store.now() + 2500; openSheet({ type: 'card', id: d.id, team: d.team, pid: '' }); },
+  cardPick(d) { S.sheet.pid = d.pid; render(true); },
+  async cardColor(d) {
+    const s = S.sheet; S.sheet = null; render(true); S.mute = S.store.now() + 2500;
+    await act(s.id, (x, gr, ctx) => L.card(x, gr, ctx, s.team, s.pid, d.color));
+  },
+  async cardUndo(d) {
+    const l = logsOf(d.id).find((x) => x.id === d.log); if (!l) return;
+    await S.store.update(`t/${S.tid}/logs/${d.id}/${l.id}`, { x: true });
+    await S.store.tx(`t/${S.tid}/games/${d.id}`, (g) => { L.uncard(g, T().grades[g.gid], {}, l); return JSON.parse(JSON.stringify(g)); });
+    toast('경고·퇴장 기록을 취소했습니다.');
+  },
+  gRestEnd(d) { return act(d.id, (x, gr) => L.endRest(x, gr)); },
+  async gServe(d) { const g = gameOf(d.id); await S.store.update(`t/${S.tid}/games/${d.id}`, { fs: g.fs === 'b' ? 'a' : 'b' }); },
+  async setStarters(d) { await S.store.update(gradePath(), { starters: Number(d.val) }); },
+  drawClose() { const d = T().display; S.hideDraw = d && d.at; render(true); if (d && d.mode === 'draw') S.store.set(`t/${S.tid}/display`, null).catch(() => {}); },
   gPoss(d) { Sound.unlock(); return act(d.id, (x, gr, ctx) => L.possession(x, gr, ctx, d.team)); },
   gShot(d) { return act(d.id, (x, gr, ctx) => L.shotSet(x, gr, ctx, Number(d.secs))); },
   gCross(d) { return act(d.id, (x, gr) => L.crossed(x, gr)); },
@@ -1342,6 +1395,13 @@ function tick() {
     if (MODE === 'teacher' && g.status === 'live' && g.clock && g.clock.run && left <= 0 && !tick.busy) {
       tick.busy = true; act(g.id, L.timeUp).finally(() => { tick.busy = false; });
     }
+  }
+  // 쉬는 시간: 0이 되면 버저를 한 번 울린다(선생님 화면과 전광판).
+  for (const el of document.querySelectorAll('[data-rest]')) {
+    const g = gameOf(el.dataset.rest); if (!g || !g.rest) continue;
+    const left = L.restLeft(g, now), text = left > 0 ? L.fmtClock(left) : '끝';
+    if (el.textContent !== text) el.textContent = text;
+    if (left <= 0 && now - (g.rest.at + g.rest.ms) < 3000 && tick.restDone !== g.rest.at && (MODE === 'teacher' || MODE === 'board')) { tick.restDone = g.rest.at; Sound.buzzer(); }
   }
   // 농구 공격 제한 시간·8초: 숫자를 갱신하고, 선생님 화면에서는 0이 되면 위반으로 처리한다.
   for (const el of document.querySelectorAll('[data-sc],[data-bc]')) {

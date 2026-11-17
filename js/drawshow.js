@@ -26,7 +26,7 @@ export function startBalls(canvas, names, at, now) {
     const dpr = Math.min(2, window.devicePixelRatio || 1), w = canvas.clientWidth, h = canvas.clientHeight;
     if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-    const t = (now() - at) / 1000, S = Math.min(w, h), cx = w / 2, cy = h * 0.55, R = S * 0.3, br = Math.max(10, R * 0.2);
+    const t = (now() - at) / 1000, S = Math.min(w, h), cap = Math.max(13, S * 0.045), R = Math.min(w * 0.4, (h - cap * 3) * 0.33), cx = w / 2, br = Math.max(10, R * 0.2), cy = h - cap * 3 - R - br * 0.6;
     const k = Math.floor((t - LEAD) / STEP), into = t - LEAD - k * STEP;      // k번째 팀 차례, 그 차례가 시작되고 지난 시간
     const cur = t < LEAD ? -1 : Math.min(k, n);
     const over = cur >= n;
@@ -49,15 +49,17 @@ export function startBalls(canvas, names, at, now) {
     if (cur >= 0 && !over && into >= SHOW) {
       const up = ease((into - SHOW) / 0.45), away = ease((into - LAND) / (STEP - LAND));
       const big = Math.min(S * 0.2, R * 0.62);
-      const x0 = cx, y0 = cy - R * 0.86, x1 = cx, y1 = Math.max(big + 6, cy - R - br * 2.4 - big * 0.2);
+      const x0 = cx, y0 = cy - R * 0.86, x1 = cx, y1 = Math.max(big + 6, cy - R - br * 2.4 - big * 0.6);
       const x = x0 + (x1 - x0) * up + (w + big - x1) * away, y = y0 + (y1 - y0) * up;
       const r = (br + (big - br) * up) * (1 - 0.55 * away);
+      ctx.globalAlpha = 1 - away;   // 자리로 넘어가며 흐려져 사라진다(가장자리에 반쯤 걸려 보이지 않게)
       ball(x, y, r, COLORS[cur % COLORS.length], up > 0.6 ? names[cur] : '');
+      ctx.globalAlpha = 1;
     }
     // 글
     ctx.fillStyle = '#C3CAD6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.max(13, S * 0.045)}px "Noto Sans KR", sans-serif`;
-    ctx.fillText(over ? '추첨이 끝났습니다' : cur < 0 ? '공을 섞는 중' : `${cur + 1}번째 공 · 남은 공 ${n - cur - (into >= SHOW ? 1 : 0)}개`, cx, h - Math.max(14, S * 0.05));
+    ctx.font = `700 ${cap}px "Noto Sans KR", sans-serif`;
+    ctx.fillText(over ? '추첨이 끝났습니다' : cur < 0 ? '공을 섞는 중' : `${cur + 1}번째 공 · 남은 공 ${n - cur - (into >= SHOW ? 1 : 0)}개`, cx, h - cap * 1.2);   // 글은 통 아래 바깥에 둔다
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
