@@ -898,9 +898,9 @@ try {
     await t.waitForFunction(() => document.querySelector('[data-bc]') && document.querySelector('[data-bc]').textContent === '0', null, { timeout: 15000 });
     assert.equal(await running(), true);
     assert.ok(!/8초 위반/.test(await text(t)));
-    // 공격 제한 시간(10초로 줄여 둠)이 다 되면 버저와 함께 시계가 멈추고 기록이 남는다
-    await t.waitForFunction(() => /농구 나 10초 위반 · 농구 가 공/.test(document.body.innerText), null, { timeout: 15000 });
-    assert.equal(await running(), false);
+    // 공격 제한 시간(10초로 줄여 둠)이 다 되면 버저만 울리고 기록이 남는다. 경기 시계는 계속 간다
+    await t.waitForFunction(() => /농구 나 10초 버저/.test(document.body.innerText), null, { timeout: 15000 });
+    assert.equal(await running(), true);
     // 전광판: 팀 파울과 공격 제한 시간
     await b.goto(`${base}?b=${tid}`);
     await b.waitForSelector('.board .setbadge');

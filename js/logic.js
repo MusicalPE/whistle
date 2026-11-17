@@ -351,12 +351,12 @@ export function shotUp(g, grade, ctx) {
   norm(g, grade);
   if (g.status !== 'live') return [];
   if (!(g.sc && g.sc.run && tLeft(g.sc, ctx.now) <= 0)) return [];
-  halt(g, ctx.now);
-  const team = g.poss, other = team === 'a' ? 'b' : team === 'b' ? 'a' : '';
+  // 버저만 울리고 경기 시계는 그대로 간다(버저 비터일 수 있으니 멈출지는 심판이 판단한다).
+  const team = g.poss;
   g.sc = { run: false, left: 0, at: ctx.now };
   delete g.bc;
   g.buzz = { at: ctx.now, k: 'buzzer' };
-  return [mk(g, grade, ctx, 'info', `${team ? `${ctx.names[team]} ` : ''}${Math.round(shotMs(grade) / 1000)}초 위반${other ? ` · ${ctx.names[other]} 공` : ''}`)];
+  return [mk(g, grade, ctx, 'info', `${team ? `${ctx.names[team]} ` : ''}${Math.round(shotMs(grade) / 1000)}초 버저`)];
 }
 
 // 시계가 0이 됐을 때 어느 기기에서든 부른다. 여러 번 불러도 한 번만 적용된다.

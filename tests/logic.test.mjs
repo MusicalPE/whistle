@@ -501,15 +501,15 @@ test('농구 공격 제한 시간과 8초: 공격권·골·일시 정지에 맞�
   // 8초는 0이 돼도 울리지 않고 시계도 멈추지 않는다
   assert.deepEqual(L.shotUp(g, grade, ctxAt(64000)), []);
   assert.deepEqual([L.tLeft(g.bc, 64000), g.clock.run, g.buzz], [0, true, undefined]);
-  // 공격 제한 시간이 다 되면 버저와 함께 시계가 멈춘다
+  // 공격 제한 시간이 다 되면 버저만 울리고 경기 시계는 계속 간다(멈출지는 심판이 판단)
   const v = L.shotUp(g, grade, ctxAt(70000));
-  assert.match(v[0].text, /나팀 24초 위반 · 가팀 공/);
-  assert.deepEqual([g.clock.run, g.sc.run, g.bc, g.buzz.k], [false, false, undefined, 'buzzer']);
+  assert.match(v[0].text, /나팀 24초 버저/);
+  assert.deepEqual([g.clock.run, g.sc.run, g.bc, g.buzz.k], [true, false, undefined, 'buzzer']);
   assert.deepEqual(L.shotUp(g, grade, ctxAt(71000)), [], '두 번 불러도 한 번만');
-  L.possession(g, grade, ctxAt(72000), 'a'); L.crossed(g, grade); L.toggleClock(g, grade, ctxAt(72000));
+  L.possession(g, grade, ctxAt(72000), 'a'); L.crossed(g, grade);
   const v24 = L.shotUp(g, grade, ctxAt(96000));
-  assert.match(v24[0].text, /가팀 24초 위반 · 나팀 공/);
-  assert.equal(g.clock.run, false);
+  assert.match(v24[0].text, /가팀 24초 버저/);
+  assert.equal(g.clock.run, true);
   // 구간이 바뀌거나 경기가 끝나면 지운다
   L.nextPart(g, grade, ctxAt(97000));
   assert.deepEqual([g.sc, g.bc, g.poss], [undefined, undefined, undefined]);
