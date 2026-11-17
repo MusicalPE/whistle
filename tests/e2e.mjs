@@ -38,7 +38,10 @@ const watch = (page, name) => {
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${name}: ${m.text()}`); });
 };
 const steps = [];
-const step = async (name, fn) => { await fn(); steps.push(name); };
+// ONLY=글 을 주면 처음 두 단계(대회·학년 만들기)와 이름에 그 글이 든 단계만 돌린다(고치는 동안 빨리 확인하려고).
+const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
+let stepNo = 0;
+const step = async (name, fn) => { if (only && stepNo++ >= 2 && !only.test(name)) return; await fn(); steps.push(name); };
 const shot = async (page, name) => { if (shots) await page.screenshot({ path: path.join(shots, `${name}.png`), fullPage: true }); };
 const btn = (page, name) => page.locator('#app').getByRole('button', { name, exact: true });
 const sbtn = (page, name) => page.locator('#sheet').getByRole('button', { name, exact: true });
