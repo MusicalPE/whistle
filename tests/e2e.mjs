@@ -66,6 +66,16 @@ async function addGrade(label, sport) {
   await t.fill('#ng-label', label);
   await t.selectOption('#ng-sport', sport);
   await sbtn(t, '추가').click();
+  // 새 학년은 '점수만'이 기본. 아래 단계들은 득점 선수 고르기를 밟으므로 '경기 중 고르기'로 바꿔 둔다.
+  await t.goto(`${base}#rules`);
+  await t.waitForSelector('#g-sport');
+  const only = t.locator('[data-act="setGrade"][data-key="scoreOnly"]');
+  if (await only.count()) {
+    assert.equal(await only.and(t.locator('.on')).innerText(), '점수만', '새 학년 기본값은 점수만');
+    await t.locator('[data-act="setGrade"][data-key="scoreOnly"][data-val="0"]').click();
+    await t.waitForSelector('[data-key="scoreOnly"][data-val="0"].on');
+  }
+  await t.goto(`${base}#home`);
 }
 async function addGameAndOpen() {
   await t.goto(`${base}#games`);
@@ -233,6 +243,8 @@ try {
     await t.selectOption('#g-format', 'halves');
     await t.waitForFunction(() => document.querySelector('#g-format').value === 'halves');
     await t.selectOption('#g-sport', 'futsal');
+    await t.waitForFunction(() => document.querySelector('#g-sport').value === 'futsal');
+    assert.equal(await t.locator('[data-key="scoreOnly"].on').innerText(), '경기 중 고르기', '종목을 바꿔도 고른 방식은 그대로');
     await t.goto(`${base}#settings`);
     await t.fill('#t-title', '햇살초 리그'); await t.locator('#t-title').blur();
     await s.waitForFunction(() => /햇살초 리그/.test(document.body.innerText));

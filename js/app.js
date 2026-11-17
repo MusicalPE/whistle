@@ -145,7 +145,7 @@ const helpBtn = (cls = '') => `<button class="helpbtn ${cls}" data-act="help"><s
 const HELP = [
   ['처음 준비', ['대회를 만들고 홈에서 "+ 학년 추가"로 학년과 종목을 고릅니다.', '홈의 "팀 명단"에서 팀을 만들고 번호와 이름을 붙여 넣습니다. 선발 · 후보 · 빠짐을 정해 둡니다.', '경기 시간, 선발 인원, 교체 카드 같은 규칙은 홈의 "종목·규칙"에서 바꿉니다.', '"경기" 탭에서 "+ 경기 추가"로 맞붙을 두 팀을 고릅니다.']],
   ['대회 편성 (선택)', ['경기를 하나씩 넣는 대신 홈의 "대회 편성"에서 풀리그, 토너먼트, 조별 예선 + 결선, 원형 예선 + 결선, 스위스 + 결선 가운데 골라 한꺼번에 짤 수 있습니다.', '"추첨하기"로 팀을 섞고, 전광판에 추첨을 띄우면 공 뽑기로 한 팀씩 뽑히는 모습을 함께 볼 수 있습니다.', '예선이나 앞 경기가 끝나면 결선 자리에 팀이 자동으로 들어갑니다. 결선이 동점이면 연장을 열거나 승자를 고릅니다.']],
-  ['기록지 (선택)', ['종목·규칙에서 득점 선수를 "점수만"으로 두면 경기 중에는 점수만 올리고 내립니다.', '경기 화면의 "기록지 인쇄"로 팀과 명단이 채워진 종이 기록지를 뽑습니다. 경기 탭에서는 모든 경기 기록지나 빈 양식을 한꺼번에 뽑을 수 있습니다.', '학교급(초등, 중·고)은 대회 설정에서 고릅니다. 초등용은 꼭 필요한 칸만 있습니다.', '경기가 끝난 뒤 "기록 입력"에서 기록지의 합계를 옮겨 적으면 개인 기록에 들어갑니다. 기록지를 쓰지 않아도 됩니다.']],
+  ['기록지 (선택)', ['새 학년은 경기 중에 점수만 올리고 내립니다. 득점한 선수까지 경기 중에 고르려면 종목·규칙에서 득점 선수를 "경기 중 고르기"로 바꿉니다.', '경기 화면의 "기록지 인쇄"로 팀과 명단이 채워진 종이 기록지를 뽑습니다. 경기 탭에서는 모든 경기 기록지나 빈 양식을 한꺼번에 뽑을 수 있습니다.', '학교급(초등, 중·고)은 대회 설정에서 고릅니다. 초등용은 꼭 필요한 칸만 있습니다.', '경기가 끝난 뒤 "기록 입력"에서 기록지의 합계를 옮겨 적으면 개인 기록에 들어갑니다. 기록지를 쓰지 않아도 됩니다.']],
   ['시계 맞추기', ['시계를 멈추면 아래에 −10초, −1초, +1초, +10초 단추가 나옵니다. 늦게 멈췄거나 늦게 다시 시작했을 때 남은 시간을 맞춥니다.', '농구 공격 제한 시간도 −1초, +1초로 맞출 수 있습니다.']],
   ['경기 진행', ['경기를 누르고 "경기 시작"을 누르면 시계가 돕니다.', '"+1 득점"을 누르고 넣은 선수를 고릅니다. 바쁘면 "선수 없이 점수만 올리기"를 누르세요.', '점수만 올린 득점은 나중에 경기 기록에서 그 줄을 눌러 선수와 어시스트를 넣을 수 있습니다. 끝난 경기도 됩니다.', '"선수 교체"에서 나가는 선수와 들어가는 선수를 누릅니다. 교체 카드는 알아서 줄어듭니다.', '잘못 올린 점수는 "−"로 뺍니다.']],
   ['종목별 규칙', ['축구·풋살: "경고 · 퇴장"을 누르고 선수를 고릅니다. 경고 두 번이면 퇴장이고, 퇴장당한 선수는 경기장에서 빠집니다.', '배드민턴·탁구: 단식이나 복식으로 팀을 만듭니다(팀 하나에 선수 한두 명). 서브할 쪽이 표시되고, 듀스면 2점 차가 나야 세트를 끝낼 수 있습니다.', '쉬는 시간: "종목·규칙"에서 분을 정해 두면 전반이나 쿼터, 세트가 끝날 때 자동으로 셉니다. 시계를 시작하면 끝납니다.']],
@@ -1079,7 +1079,7 @@ const actions = {
   async saveGrade() {
     const label = val('ng-label'); if (!label) return toast('학년 이름을 적어 주세요.');
     const id = S.store.id();
-    await S.store.set(`t/${S.tid}/grades/${id}`, { ...L.gradeFromSport(val('ng-sport'), label), order: S.store.now() });
+    await S.store.set(`t/${S.tid}/grades/${id}`, { ...L.gradeFromSport(val('ng-sport'), label), scoreOnly: true, order: S.store.now() });
     S.gid = id; S.sheet = null; render(true);
   },
   delGradeAsk() { const gr = grade(); openSheet({ type: 'confirm', title: `${gr.label}을(를) 지울까요?`, text: `팀 ${Object.keys(teamsOf(gr.id)).length}개, 경기 ${gamesOf(gr.id).length}개와 기록이 모두 지워집니다. 지운 뒤 15초 동안은 되돌릴 수 있습니다.`, yes: `${gr.label} 지우기`, danger: true, run: 'delGrade' }); },
@@ -1420,7 +1420,7 @@ const changes = {
   tName(el) { const v = el.value.trim(); if (v) S.store.update(`t/${S.tid}/meta`, { name: v }); },
   teamName(el) { const v = el.value.trim(); if (v) S.store.update(teamPath(), { name: v }); },
   gradeField(el) { const v = el.value.trim(); if (v || el.dataset.key === 'sportName') S.store.update(gradePath(), { [el.dataset.key]: v }); },
-  gradeSport(el) { const gr = grade(); S.store.update(gradePath(), { ...L.gradeFromSport(el.value, gr.label), sportName: gr.sportName || '' }); },
+  gradeSport(el) { const gr = grade(); S.store.update(gradePath(), { ...L.gradeFromSport(el.value, gr.label), scoreOnly: !!gr.scoreOnly, sportName: gr.sportName || '' }); },
   recTeam(el) { S.rec.team = el.value; S.rec.key = null; render(true); },
   recSort(el) { S.rec.sort = el.value; render(true); },
   memberRole(el) { S.store.update(`m/${S.tid}/${el.dataset.uid}`, { role: el.value }).catch((e) => toast(friendly(e))); },
